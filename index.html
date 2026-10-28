@@ -57,6 +57,8 @@
   #feed div { background:rgba(0,0,0,.55); padding:3px 12px; font-size:18px; font-weight:600; border:1px solid transparent; }
   #feed .me { border-color:#d23; }
   .n-ct { color:#8ab8ff; } .n-t { color:#f2c06e; }
+  #flash { position:absolute; inset:0; background:radial-gradient(circle, #fff8e0, #ffd9a0 60%, #ffb060); opacity:0; mix-blend-mode:screen; }
+  #nades { font-size:16px; color:#cfd6df; font-weight:600; }
   #dmg { position:absolute; inset:0; box-shadow:inset 0 0 160px rgba(200,0,0,.8); opacity:0; transition:opacity .35s; }
   #center { position:absolute; left:50%; top:28%; transform:translateX(-50%); text-align:center; font-size:34px; font-weight:700; }
   #center small { font-size:20px; color:#d6dbe2; }
@@ -156,7 +158,8 @@
     <div class="keys">
       <b>W A S D</b> бег &nbsp; <b>Пробел</b> прыжок &nbsp; <b>Shift</b> шаг<br>
       <b>ЛКМ</b> огонь &nbsp; <b>ПКМ</b> прицел снайперки &nbsp; <b>R</b> перезарядка<br>
-      <b>1</b> основное <b>2</b> пистолет <b>3</b> нож &nbsp; <b>B</b> магазин (на своей базе)<br>
+      <b>1</b> основное <b>2</b> пистолет <b>3</b> нож <b>4</b> граната &nbsp; <b>B</b> магазин (на своей базе)<br>
+      Граната: <b>ЛКМ</b> бросок далеко, <b>ПКМ</b> бросок под ноги<br>
       <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Деньги: убийство +$500, в голову +$1000, смерть — штраф.
     </div>
     <button id="adminBtn" style="width:100%;margin-top:14px;display:none">⚙ Админ-панель</button>
@@ -184,9 +187,13 @@
         <label class="chk"><input type="checkbox" data-cfg="ff"> Огонь по своим</label>
         <label class="chk"><input type="checkbox" data-cfg="blood"> Кровь</label>
         <label class="chk"><input type="checkbox" data-cfg="gore"> Отлетают части тела</label>
+        <label>Гранат в руках, максимум<input type="number" data-cfg="maxNades" min="0" max="10"></label>
+        <label>Сила гранаты, %<input type="number" data-cfg="nadePower" min="0" max="500" step="10"></label>
       </section>
       <section><h3>Боты</h3>
-        <label>Количество<select id="aBots"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+        <button id="aBotCT">+ Бот за Спецназ</button>
+        <button id="aBotT">+ Бот за Террористов</button>
+        <button id="aBotsNone">Убрать всех ботов</button>
         <label>Сложность<select data-cfg="botLevel"><option value="0">Лёгкие</option><option value="1">Нормальные</option><option value="2">Сложные</option></select></label>
         <h3 style="margin-top:16px">Матч</h3>
         <button id="aRestart">Новый матч (сбросить счёт и деньги)</button>
@@ -206,17 +213,18 @@
   <div id="cross"><i></i><i></i><i></i><i></i></div>
   <div id="hitmark"></div>
   <div id="dmg"></div>
+  <div id="flash"></div>
   <div id="center"></div>
   <div id="money">$0</div>
   <div id="moneypops"></div>
   <div id="buyhint">B — магазин</div>
   <div id="hp"><span class="plus">✚</span><span id="hpv">100</span><div class="meter"><div id="hpbar" style="width:100%"></div></div>
     <span id="arm"><span class="shield">⛉</span><span id="armv">0</span><span id="helm">⛑</span></span></div>
-  <div id="ammo"><div id="wname">Винтовка</div><div class="num"><span id="ammov">30</span> <small id="ammor">/ 90</small></div></div>
+  <div id="ammo"><div id="nades"></div><div id="wname">Винтовка</div><div class="num"><span id="ammov">30</span> <small id="ammor">/ 90</small></div></div>
   <div id="scope"></div>
   <div id="buy">
     <div class="buyp">
-      <h2>Магазин <span id="buyMoney">$0</span> <small>цифра или клик · 9 — патроны · B — закрыть</small></h2>
+      <h2>Магазин <span id="buyMoney">$0</span> <small>цифра или клик · 0 — патроны · B — закрыть</small></h2>
       <div id="buyzone"></div>
       <div id="buyBody"></div>
     </div>
@@ -248,7 +256,10 @@ const WEAPONS = {
   deagle:  { name:'Desert Eagle', slot:2, dmg:52, head:4, rate:0.35, mag:7,  reserve:35,  auto:false, spread:0.008, bloom:0.03,  reload:2.0, range:200, kick:0.05,  ap:0.93 },
   beretta: { name:'Beretta',      slot:2, dmg:24, head:4, rate:0.14, mag:15, reserve:120, auto:false, spread:0.006, bloom:0.01,  reload:1.6, range:200, kick:0.015, ap:0.5 },
   knife:   { name:'Нож',          slot:3, dmg:55, head:1, rate:0.45, mag:Infinity, reserve:0, auto:true, spread:0, bloom:0, reload:0, range:2.3, kick:0, ap:0.85 },
+  grenade: { name:'Граната',      slot:4, dmg:0,  head:1, rate:0.8,  mag:Infinity, reserve:0, auto:false, spread:0, bloom:0, reload:0, range:0, kick:0, ap:0.5 },
 };
+// the blast kills within ~2 m, badly hurts at 4–5 m and still scratches at 8 m
+const NADE = { fuse: 1.6, radius: 9, maxDmg: 165, throwSpeed: 15, lobSpeed: 7 };
 const BUY = ['ak47','m4','shotgun','sniper','deagle','beretta'];
 const START_PISTOL = 'beretta';      // everyone spawns with it, like the free pistol in CS
 const DEFAULT_GUN = { t:'ak47', ct:'m4' }; // what bots carry
@@ -257,8 +268,8 @@ const ITEM_NAME = { ...Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) =
 const DEFAULT_CFG = {
   startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
   winKills:25, respawn:3, ff:false, buyAnywhere:false, infAmmo:false, loseWeapons:true,
-  blood:true, gore:true, botLevel:1,
-  prices: { ak47:2700, m4:2900, shotgun:1050, sniper:4750, deagle:700, beretta:300, kevlar:650, helmet:1000 },
+  blood:true, gore:true, botLevel:1, maxNades:1, nadePower:100,
+  prices: { ak47:2700, m4:2900, shotgun:1050, sniper:4750, deagle:700, beretta:300, kevlar:650, helmet:1000, grenade:300 },
   ammoPrices: { ak47:80, m4:80, shotgun:65, sniper:125, deagle:40, beretta:30 },
 };
 let cfg = structuredClone(DEFAULT_CFG);
@@ -266,7 +277,7 @@ const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
 const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
 const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3;
-const PEER_PREFIX = 'kidstrike-v3-'; // bump when the network messages change, so old tabs can't join new games
+const PEER_PREFIX = 'kidstrike-v4-'; // bump when the network messages change, so old tabs can't join new games
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
 
 const $ = s => document.querySelector(s);
@@ -606,6 +617,8 @@ function makeAvatar(id, name, team) {
     gun.visible = false;
     hand.add(gun);
   }
+  const nade = guns.grenade = grenadeMesh(1.3 / ws);
+  nade.position.set(0, 0.09 / ws, 0.03 / ws); nade.visible = false; hand.add(nade);
   // invisible boxes for bullets
   const hit = (w, h, d, y, part) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hitMat); m.position.y = y; m.userData = { pid:id, part }; body.add(m); return m; };
   // the model faces -Z, so its right side is +X
@@ -651,6 +664,8 @@ function setupViewmodels() {
     muzzles[k] = new THREE.Vector3(x - Math.sin(yaw) * GUN_LEN[k] / 2, y + 0.035, z - GUN_LEN[k] / 2);
   }
 
+  vmModels.grenade = new THREE.Group(); vmModels.grenade.add(grenadeMesh(1));
+  vmModels.grenade.position.set(0.14, -0.15, -0.3); vmModels.grenade.rotation.set(0.2, -0.4, 0);
   const knife = MODELS.fish_knife.clone();
   knife.scale.setScalar(1.6); knife.rotation.set(-0.9, Math.PI/2, 0);
   vmModels.knife = new THREE.Group(); vmModels.knife.add(knife);
@@ -812,24 +827,30 @@ function killEffect(avatar, m) {
     // a pool spreading under the body
     setTimeout(() => splat(avatar.position.clone().addScaledVector(dir, 0.8).setY(0), UP, 1.6 + Math.random() * 0.6, 1), 700);
   }
-  const boneName = LIMB_BONE[m.part];
-  if (!cfg.gore || !boneName) return;
-  const bone = u.body.getObjectByName(boneName);
-  if (!bone) return;
-  const start = bone.getWorldPosition(new THREE.Vector3());
-  bone.scale.setScalar(0.0001); // hide it on the body
-  u.hidden = bone;
-  const limb = makeLimb(m.part, r ? r.team : 'ct');
-  limb.position.copy(start);
-  scene.add(limb);
-  const speed = m.part === 'head' ? 6 : 4.5;
-  gibs.push({ obj: limb, vel: dir.clone().multiplyScalar(speed).add(new THREE.Vector3((Math.random() - .5) * 2, 3 + Math.random() * 2, (Math.random() - .5) * 2)),
-    spin: new THREE.Vector3(Math.random() * 12 - 6, Math.random() * 12 - 6, Math.random() * 12 - 6), life: 15, trail: 0,
-    stump: m.part === 'head' ? { bone: u.body.getObjectByName('mixamorigNeck'), t: 1.5 } : { bone: bone.parent, t: 1.0 } });
+  if (!cfg.gore) return;
+  // a bullet takes off the part it hit; a grenade tears off two or three at once
+  const parts = m.part === 'blast'
+    ? Object.keys(LIMB_BONE).sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 2))
+    : LIMB_BONE[m.part] ? [m.part] : [];
+  u.hidden = u.hidden || [];
+  for (const part of parts) {
+    const bone = u.body.getObjectByName(LIMB_BONE[part]);
+    if (!bone) continue;
+    const start = bone.getWorldPosition(new THREE.Vector3());
+    bone.scale.setScalar(0.0001); // hide it on the body
+    u.hidden.push(bone);
+    const limb = makeLimb(part, r ? r.team : 'ct');
+    limb.position.copy(start);
+    scene.add(limb);
+    const speed = m.part === 'blast' ? 9 : part === 'head' ? 6 : 4.5;
+    gibs.push({ obj: limb, vel: dir.clone().multiplyScalar(speed).add(new THREE.Vector3((Math.random() - .5) * 3, 3 + Math.random() * (m.part === 'blast' ? 5 : 2), (Math.random() - .5) * 3)),
+      spin: new THREE.Vector3(Math.random() * 12 - 6, Math.random() * 12 - 6, Math.random() * 12 - 6), life: 15, trail: 0,
+      stump: part === 'head' ? { bone: u.body.getObjectByName('mixamorigNeck'), t: 1.5 } : { bone: bone.parent, t: 1.0 } });
+  }
 }
 function restoreLimbs(avatar) {
   const u = avatar.userData;
-  if (u.hidden) { u.hidden.scale.setScalar(1); u.hidden = null; }
+  if (u.hidden) { for (const b of u.hidden) b.scale.setScalar(1); u.hidden = null; }
   const r = [...remotes.values()].find(q => q.avatar === avatar);
   if (r) r.deathYaw = null;
 }
@@ -870,6 +891,256 @@ function updateGore(dt) {
   }
 }
 
+// ================= grenades =================
+// HE grenade model: olive body, steel cap, safety lever and pin ring
+function grenadeMesh(s = 1) {
+  const g = new THREE.Group();
+  const olive = new THREE.MeshStandardMaterial({ color: 0x4b5232, roughness: 0.7, metalness: 0.3 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x8a8f97, roughness: 0.35, metalness: 1 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.034, 16, 12), olive); body.scale.y = 1.25; g.add(body);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.017, 0.022, 12), steel); cap.position.y = 0.047; g.add(cap);
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.075, 0.006), steel); lever.position.set(0.024, 0.02, 0); lever.rotation.z = -0.25; g.add(lever);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.002, 6, 16), steel); ring.position.set(-0.02, 0.058, 0); ring.rotation.y = Math.PI / 2; g.add(ring);
+  g.scale.setScalar(s);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+// same fixed-step physics on every computer: gravity, bounces off walls and floor, rolling to a stop
+const NADE_R = 0.05;
+function stepNade(n, dt) {
+  n.acc += dt; n.t += dt; n.bounced = 0;
+  const h = 0.005;
+  while (n.acc >= h) {
+    n.acc -= h;
+    n.vel.y -= 14 * h;
+    for (const ax of ['x', 'y', 'z']) {
+      n.pos[ax] += n.vel[ax] * h;
+      let hit = ax === 'y' && n.pos.y < NADE_R;
+      if (!hit) for (const b of colliders) if (n.pos.x > b.min.x - NADE_R && n.pos.x < b.max.x + NADE_R && n.pos.y > b.min.y - NADE_R &&
+        n.pos.y < b.max.y + NADE_R && n.pos.z > b.min.z - NADE_R && n.pos.z < b.max.z + NADE_R) { hit = true; break; }
+      if (!hit) continue;
+      n.pos[ax] -= n.vel[ax] * h;
+      const hard = Math.abs(n.vel[ax]) > 1;
+      if (hard) { n.bounced++; for (const o of ['x', 'y', 'z']) if (o !== ax) n.vel[o] *= 0.75; }
+      n.vel[ax] *= hard ? -0.4 : 0;
+      if (ax === 'y' && !hard) { n.vel.x *= 1 - 3 * h; n.vel.z *= 1 - 3 * h; } // rolling on the ground
+    }
+  }
+}
+const clientNades = new Map();
+function spawnNade(m) {
+  const obj = grenadeMesh(1.4);
+  obj.position.set(...m.o);
+  scene.add(obj);
+  clientNades.set(m.nid, { obj, pos: new THREE.Vector3(...m.o), vel: new THREE.Vector3(...m.v), t: 0, acc: 0 });
+}
+function updateNades(dt) {
+  for (const n of clientNades.values()) {
+    stepNade(n, dt);
+    n.obj.position.copy(n.pos);
+    const sp = n.vel.length();
+    n.obj.rotation.x += sp * dt * 3; n.obj.rotation.z += sp * dt * 2;
+    if (n.bounced) { const d = n.pos.distanceTo(me.pos); playClink(Math.min(1, sp / 8) / (1 + d * 0.15), d); }
+  }
+}
+// throwing: left mouse = long throw, right mouse = short lob
+let nadeHideT = 0;
+function throwNade(lob) {
+  if (!me.alive || me.nades <= 0 || nadeHideT > 0) return;
+  const aim = new THREE.Vector3(); camera.getWorldDirection(aim);
+  const o = camera.getWorldPosition(new THREE.Vector3()).addScaledVector(aim, 0.35);
+  const v = aim.clone().multiplyScalar(lob ? NADE.lobSpeed : NADE.throwSpeed).add(new THREE.Vector3(0, lob ? 2.5 : 2, 0)).addScaledVector(me.vel, 0.6);
+  const r2 = x => +x.toFixed(3);
+  sendToHost({ t:'nade', o: [r2(o.x), r2(o.y), r2(o.z)], v: [r2(v.x), r2(v.y), r2(v.z)] });
+  me.nades--; nadeHideT = 0.6;
+  playSample('throw', 0.6);
+  setTimeout(() => { if (me.nades <= 0 && me.weapon === 'grenade') { me.loadout[4] = null; selectSlot(me.loadout[1] ? 1 : 2); } }, 450);
+}
+
+// ---- the explosion: flash, fireball, sparks, flying dirt, shock wave, smoke column, scorch mark, shake and sound
+function fireTexture(core, mid, edge, noise) {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, core); gr.addColorStop(0.45, mid); gr.addColorStop(1, edge);
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  g.globalCompositeOperation = 'destination-out'; // ragged, billowy edges instead of a perfect disc
+  for (let i = 0; i < noise; i++) {
+    const a = Math.random() * 6.28, r = 30 + Math.random() * 40;
+    g.fillStyle = `rgba(0,0,0,${Math.random() * 0.5})`;
+    g.beginPath(); g.arc(64 + Math.cos(a) * r, 64 + Math.sin(a) * r, 6 + Math.random() * 16, 0, 6.28); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const FIRE_TEX = fireTexture('rgba(255,255,230,1)', 'rgba(255,150,30,.85)', 'rgba(120,20,0,0)', 40);
+const SMOKE_TEX = fireTexture('rgba(70,66,62,.85)', 'rgba(55,52,50,.5)', 'rgba(40,40,40,0)', 60);
+const scorchMat = new THREE.MeshBasicMaterial({ map: SPLAT_TEX, color: 0x000000, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+const booms = [];   // each: list of particles with their own update
+let shake = 0;
+function puff(tex, pos, vel, opts) {
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: opts.add ? THREE.AdditiveBlending : THREE.NormalBlending, rotation: Math.random() * 6.28 });
+  const s = new THREE.Sprite(mat);
+  s.position.copy(pos); s.scale.setScalar(opts.size);
+  scene.add(s);
+  return { s, vel, age: -(opts.delay || 0), ...opts };
+}
+function explosion(at) {
+  const parts = [];
+  const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  // blinding flash + light that lights up walls around
+  const light = new THREE.PointLight(0xffa040, 0, 30, 1.6); light.position.copy(at).add(v3(0, 1, 0)); scene.add(light);
+  parts.push({ light, age: 0, life: 0.5 });
+  parts.push(puff(FIRE_TEX, at.clone().add(v3(0, 0.6, 0)), v3(0, 0, 0), { add: true, size: 2, grow: 6, life: 0.14, hdr: 3 }));
+  // fireball: billowing orange clouds pushed outwards and up
+  for (let i = 0; i < 28; i++) {
+    const dir = v3(Math.random() - .5, Math.random() * 1.3 + 0.3, Math.random() - .5).normalize();
+    parts.push(puff(FIRE_TEX, at.clone().addScaledVector(dir, 0.3), dir.multiplyScalar(3 + Math.random() * 6),
+      { add: false, size: 1 + Math.random(), grow: 2.5, life: 0.6 + Math.random() * 0.6, drag: 3.5, hdr: 1.6, cool: true }));
+  }
+  // smoke column that keeps rising for a few seconds
+  for (let i = 0; i < 26; i++) {
+    const dir = v3((Math.random() - .5) * 0.7, Math.random() * 0.6, (Math.random() - .5) * 0.7);
+    parts.push(puff(SMOKE_TEX, at.clone().add(v3(0, 1.4, 0)).addScaledVector(dir, 1.2), dir.multiplyScalar(2).add(v3(0, 1.2 + Math.random() * 1.5, 0)),
+      { size: 1.5 + Math.random() * 1.5, grow: 1.1, life: 3.5 + Math.random() * 3, drag: 1.2, delay: 0.12 + Math.random() * 0.25, fade: 0.75 }));
+  }
+  // low dust ring rolling over the ground
+  for (let i = 0; i < 16; i++) {
+    const a = i / 16 * 6.28;
+    parts.push(puff(SMOKE_TEX, at.clone().setY(0.4), v3(Math.cos(a) * 9, 0.3, Math.sin(a) * 9),
+      { size: 1.2, grow: 1.6, life: 1.8, drag: 2.2, fade: 0.55, tint: 0xc9a77a }));
+  }
+  // sparks and burning bits
+  for (let i = 0; i < 40; i++) {
+    const dir = v3(Math.random() - .5, Math.random() * 0.8 + 0.2, Math.random() - .5).normalize();
+    parts.push(puff(FLASH_TEX, at.clone().add(v3(0, 0.3, 0)), dir.multiplyScalar(8 + Math.random() * 14),
+      { add: true, size: 0.12 + Math.random() * 0.1, grow: 0, life: 0.6 + Math.random() * 0.9, gravity: 12, hdr: 6 }));
+  }
+  // dirt and stones thrown into the air
+  const dirtMat = new THREE.MeshStandardMaterial({ color: 0x6b5236, roughness: 1 });
+  for (let i = 0; i < 18; i++) {
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.03 + Math.random() * 0.06), dirtMat);
+    m.position.copy(at); m.castShadow = true; scene.add(m);
+    const dir = v3(Math.random() - .5, Math.random() + 0.4, Math.random() - .5).normalize();
+    parts.push({ mesh: m, vel: dir.multiplyScalar(5 + Math.random() * 9), age: 0, life: 3, gravity: 14, spin: Math.random() * 15 });
+  }
+  // shock wave ring racing along the ground
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 0.85, 0.5), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+  ring.rotation.x = -Math.PI / 2; ring.position.copy(at).setY(0.08); scene.add(ring);
+  parts.push({ ring, age: 0, life: 0.45 });
+  // burnt patch left on the ground
+  const scorch = new THREE.Mesh(splatGeo, scorchMat); scorch.rotation.x = -Math.PI / 2; scorch.rotation.z = Math.random() * 6.28;
+  scorch.position.copy(at).setY(0.015); scorch.scale.setScalar(3.5); scene.add(scorch); splats.push(scorch);
+  booms.push(parts);
+  // camera shake, flash and push for whoever is close
+  const d = camera.position.distanceTo(at);
+  shake = Math.max(shake, Math.max(0, 1 - d / 35) * 0.09);
+  const toCam = camera.position.clone().sub(at).normalize(), look = new THREE.Vector3(); camera.getWorldDirection(look);
+  const facing = Math.max(0, -toCam.dot(look));
+  $('#flash').style.transition = 'none'; $('#flash').style.opacity = Math.max(0, 1 - d / 25) * (0.35 + 0.65 * facing);
+  setTimeout(() => { $('#flash').style.transition = 'opacity 0.9s'; $('#flash').style.opacity = 0; }, 30);
+  if (me.alive && d < NADE.radius) me.vel.add(toCam.multiplyScalar((1 - d / NADE.radius) * 9)).add(new THREE.Vector3(0, 3 * (1 - d / NADE.radius), 0));
+  playExplosion(d);
+}
+function updateExplosions(dt) {
+  for (let b = booms.length - 1; b >= 0; b--) {
+    const parts = booms[b];
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.age += dt;
+      if (p.age < 0) { if (p.s) p.s.visible = false; continue; }
+      const k = p.age / p.life;
+      if (k >= 1) {
+        if (p.s) { scene.remove(p.s); p.s.material.dispose(); }
+        if (p.mesh) { scene.remove(p.mesh); p.mesh.geometry.dispose(); }
+        if (p.light) scene.remove(p.light);
+        if (p.ring) { scene.remove(p.ring); p.ring.geometry.dispose(); p.ring.material.dispose(); }
+        parts.splice(i, 1); continue;
+      }
+      if (p.light) p.light.intensity = 160 * Math.pow(1 - k, 2);
+      if (p.ring) { p.ring.scale.setScalar(0.5 + k * 13); p.ring.material.opacity = 0.22 * (1 - k); }
+      if (p.mesh) {
+        p.vel.y -= p.gravity * dt; p.mesh.position.addScaledVector(p.vel, dt); p.mesh.rotation.x += p.spin * dt;
+        if (p.mesh.position.y < 0.03) { p.mesh.position.y = 0.03; p.vel.multiplyScalar(0.3); p.vel.y = Math.abs(p.vel.y); p.spin *= 0.5; }
+      }
+      if (p.s) {
+        p.s.visible = true;
+        if (p.drag) p.vel.multiplyScalar(Math.max(0, 1 - p.drag * dt));
+        if (p.gravity) p.vel.y -= p.gravity * dt;
+        p.s.position.addScaledVector(p.vel, dt);
+        p.s.scale.setScalar(p.size * (1 + p.grow * Math.sqrt(k)));
+        const c = p.s.material.color;
+        if (p.hdr) {
+          // hot = brighter than white so it glows; cooling flames turn deep red and fade
+          // fire turns from yellow-white to orange to dark red, then into sooty smoke
+          const heat = p.cool ? Math.max(0, 1 - k * 1.8) : 1 - k;
+          const soot = p.cool ? Math.max(0, k * 1.8 - 0.8) : 0;
+          c.setRGB(p.hdr * (0.35 + 0.65 * heat) * (1 - soot * 0.8), p.hdr * (0.08 + 0.6 * heat * heat) * (1 - soot * 0.7), p.hdr * 0.22 * heat * heat + soot * 0.1);
+          p.s.material.opacity = Math.min(1, (1 - k) * 1.6);
+        } else {
+          if (p.tint) c.set(p.tint);
+          p.s.material.opacity = (p.fade || 0.7) * Math.min(1, p.age * 4) * (1 - k);
+        }
+      }
+    }
+    if (!parts.length) booms.splice(b, 1);
+  }
+  shake = Math.max(0, shake - dt * 0.12);
+}
+// the boom: recorded blast + long rumble, a synthesised sub-bass drop, a sharp crack, falling debris and an echo off the map.
+// Sound travels at 343 m/s, so a far explosion is heard a moment after you see it.
+let REVERB = null;
+function playExplosion(dist) {
+  if (MUTED) return;
+  const a = audio(), t0 = a.currentTime + dist / 343;
+  if (!REVERB) {
+    REVERB = a.createBuffer(2, a.sampleRate * 3.5, a.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = REVERB.getChannelData(ch); let lp = 0;
+      for (let i = 0; i < d.length; i++) { lp += (Math.random() * 2 - 1 - lp) * 0.35; d[i] = lp * Math.pow(1 - i / d.length, 2.5) * (i < a.sampleRate * 0.03 ? 0.2 : 1); }
+    }
+  }
+  const comp = a.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.4;
+  const master = a.createGain(); master.gain.value = Math.min(1.6, 2.4 / (1 + dist * 0.07));
+  const muffle = a.createBiquadFilter(); muffle.type = 'lowpass'; muffle.frequency.value = 20000 / (1 + dist * 0.09);
+  master.connect(muffle).connect(comp).connect(a.destination);
+  const verb = a.createConvolver(); verb.buffer = REVERB;
+  const verbGain = a.createGain(); verbGain.gain.value = 0.3 + Math.min(0.5, dist * 0.012);
+  verb.connect(verbGain).connect(comp);
+  const route = (node, dry, wet) => { const g1 = a.createGain(), g2 = a.createGain(); g1.gain.value = dry; g2.gain.value = wet; node.connect(g1).connect(master); node.connect(g2).connect(verb); };
+  for (const [name, vol, rate] of [['boom_punch', 1.0, 0.85], ['boom_tail', 0.9, 0.8]]) {
+    if (!SND[name]) continue;
+    const s = a.createBufferSource(); s.buffer = SND[name]; s.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
+    route(s, vol, vol * 0.7); s.start(t0);
+  }
+  // sub-bass drop you feel in the chest
+  const o = a.createOscillator(), og = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(75, t0); o.frequency.exponentialRampToValueAtTime(26, t0 + 1.1);
+  og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(1.3, t0 + 0.012); og.gain.exponentialRampToValueAtTime(0.001, t0 + 1.6);
+  o.connect(og); route(og, 1, 0.2); o.start(t0); o.stop(t0 + 1.7);
+  // the sharp crack of the detonation (fades with distance much faster than the boom)
+  const c = a.createBufferSource(), cf = a.createBiquadFilter(), cg = a.createGain();
+  c.buffer = noiseBuf; cf.type = 'highpass'; cf.frequency.value = 1200;
+  cg.gain.setValueAtTime(1.2 / (1 + dist * 0.15), t0); cg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.14);
+  c.connect(cf).connect(cg); route(cg, 1, 0.5); c.start(t0); c.stop(t0 + 0.16);
+  // dirt and stones raining down
+  if (SND.debris && dist < 30) { const s = a.createBufferSource(); s.buffer = SND.debris; route(s, 0.6, 0.2); s.start(t0 + 0.35); }
+  // ringing ears when you were right next to it
+  if (dist < 6) {
+    const r = a.createOscillator(), rg = a.createGain();
+    r.frequency.value = 3400; rg.gain.setValueAtTime(0.0001, t0); rg.gain.exponentialRampToValueAtTime(0.05 * (1 - dist / 6), t0 + 0.05); rg.gain.exponentialRampToValueAtTime(0.0001, t0 + 3);
+    r.connect(rg).connect(a.destination); r.start(t0); r.stop(t0 + 3.1);
+  }
+}
+function playClink(vol, dist) {
+  if (MUTED || vol < 0.03) return;
+  const a = audio(), t0 = a.currentTime;
+  for (const f of [2300, 3650, 5100]) {
+    const o = a.createOscillator(), g = a.createGain();
+    o.frequency.value = f * (0.97 + Math.random() * 0.06);
+    g.gain.setValueAtTime(vol * 0.12, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+    o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + 0.2);
+  }
+}
+
 let actx, noiseBuf;
 function audio() {
   if (!actx) {
@@ -890,6 +1161,8 @@ const FOLEY = { // [start s, length s, brightness 0..1, loudness]
   reload_pistol: [[0.1, 0.04, 0.8, 0.6], [0.75, 0.05, 0.85, 0.7], [1.2, 0.05, 0.95, 0.85]],
   pump:          [[0, 0.08, 0.45, 0.8], [0.2, 0.07, 0.6, 0.9]],
   bolt:          [[0, 0.05, 0.9, 0.7], [0.14, 0.07, 0.55, 0.6], [0.36, 0.06, 0.6, 0.6], [0.5, 0.05, 0.95, 0.8]],
+  throw:         [[0, 0.025, 0.95, 0.5], [0.06, 0.02, 0.9, 0.35], [0.2, 0.28, 0.12, 0.45]], // pin, lever, whoosh
+  debris: Array.from({ length: 34 }, (_, i) => [Math.pow(i / 34, 1.6) * 1.6, 0.02 + Math.random() * 0.04, 0.4 + Math.random() * 0.5, 0.5 * (1 - i / 40)]),
   // footsteps: a soft crunch of sand, not a thump (a low thump sounded like distant gunfire)
   step1: [[0, 0.05, 0.35, 0.22], [0.025, 0.04, 0.5, 0.12]], step2: [[0, 0.045, 0.3, 0.2], [0.02, 0.05, 0.45, 0.12]],
   step3: [[0, 0.055, 0.4, 0.2], [0.03, 0.035, 0.55, 0.1]],  step4: [[0, 0.05, 0.32, 0.22], [0.022, 0.045, 0.5, 0.11]],
@@ -913,6 +1186,8 @@ function loadSounds() {
   for (const k in FOLEY) SND[k] = synth(FOLEY[k]);
   for (const g of BUY) for (const v of [g, g + '_far']) fetch(`assets/snd/${v}.wav`).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
     .then(b => a.decodeAudioData(b)).then(buf => { SND[v] = buf; }).catch(() => {});
+  for (const [k, file] of [['boom_punch', 'boom_punch.flac'], ['boom_tail', 'boom_tail.ogg']]) fetch('assets/snd/' + file)
+    .then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => a.decodeAudioData(b)).then(buf => { SND[k] = buf; }).catch(() => {});
 }
 // dist in metres: far shots get quieter and duller, like in a real open space
 function playSample(name, vol = 1, dist = 0, rate = 1) {
@@ -951,11 +1226,11 @@ const me = {
   alive: false, hp: 100, weapon: START_PISTOL, zoom: false,
   // ammo = bullets in the magazine, reserve = spare bullets; loadout[slot] = owned gun (null = empty slot)
   ammo: {}, reserve: {}, loadout: { 1:null, 2:START_PISTOL, 3:'knife' },
-  money: 0, armor: 0, helmet: false,
+  money: 0, armor: 0, helmet: false, nades: 0,
   lastShot: 0, reloadEnd: 0, bloom: 0, firing: false, firedThisClick: false, stepDist: 0,
 };
 function giveWeapon(k) { me.ammo[k] = WEAPONS[k].mag; me.reserve[k] = WEAPONS[k].reserve; }
-function resetLoadout() { me.loadout = { 1:null, 2:START_PISTOL, 3:'knife' }; giveWeapon(START_PISTOL); me.weapon = START_PISTOL; }
+function resetLoadout() { me.loadout = { 1:null, 2:START_PISTOL, 3:'knife', 4:null }; me.nades = 0; giveWeapon(START_PISTOL); me.weapon = START_PISTOL; }
 giveWeapon(START_PISTOL);
 const keys = {};
 let myId = null, started = false, locked = false, showBoard = false;
@@ -989,7 +1264,7 @@ function startHost() {
     loadCfg();
     $('#adminBtn').style.display = 'block';
     $('#goal').textContent = 'до ' + cfg.winKills;
-    for (let i = 0; i < botCount; i++) addBot(i);
+    for (let i = 0; i < botCount; i++) addBot(i % 2 === 0 ? (myTeam === 'ct' ? 't' : 'ct') : myTeam);
     hostHandle(myId, { t:'hello', name: myName, team: myTeam });
     enterGame();
   });
@@ -1064,7 +1339,7 @@ function hostHandle(from, m) {
   if (m.t === 'hello') {
     const team = m.team === 't' ? 't' : 'ct';
     const p = { id: from, name: String(m.name || 'Игрок').slice(0, 14), team, hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: START_PISTOL,
-      money: cfg.startMoney, armor: 0, helmet: false };
+      money: cfg.startMoney, armor: 0, helmet: false, nades: 0 };
     H.players.set(from, p);
     hostSend(from, { t:'cfg', cfg });
     hostSpawn(p);
@@ -1091,17 +1366,26 @@ function hostHandle(from, m) {
     if (!inBuyZone(p.team, p.p)) return no('Покупать можно только на своей базе');
     if (item === 'helmet' && p.helmet && p.armor >= 100) return no('Уже есть');
     if (item === 'kevlar' && p.armor >= 100) return no('Уже есть');
+    if (item === 'grenade' && p.nades >= cfg.maxNades) return no('Больше гранат не унести');
     const cost = item === 'helmet' && p.armor >= 100 ? price - cfg.prices.kevlar : price; // helmet only, if vest is already on
     if (p.money < cost) return no('Не хватает денег');
     p.money -= cost;
     if (item === 'kevlar' || item === 'helmet') { p.armor = 100; if (item === 'helmet') p.helmet = true; }
-    hostSend(from, { t:'bought', item, money: p.money, armor: p.armor, helmet: p.helmet });
+    if (item === 'grenade') p.nades++;
+    hostSend(from, { t:'bought', item, money: p.money, armor: p.armor, helmet: p.helmet, nades: p.nades });
+  }
+  else if (m.t === 'nade') {
+    if (!p.alive || p.nades <= 0) return;
+    p.nades--;
+    hostThrow(from, m.o, m.v);
   }
 }
-function hostDamage(fromId, targetId, dmg, part, w, pt, dir) {
+// src = where the damage came from (shooter, or the grenade blast) — bodies fall and limbs fly away from it
+function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
   const a = H.players.get(fromId), v = H.players.get(targetId);
-  if (!a || !v || !v.alive || H.winLock || a === v) return;
-  if (a.team === v.team && !cfg.ff) return;
+  if (!a || !v || !v.alive || H.winLock) return;
+  if (a === v && w !== 'grenade') return;                 // only your own grenade can hurt you
+  if (a !== v && a.team === v.team && !cfg.ff) return;
   // armour: vest protects body and arms, helmet the head; how much gets through depends on the gun
   const covered = part === 'head' ? v.helmet : part !== 'lleg' && part !== 'rleg';
   if (v.armor > 0 && covered) {
@@ -1119,11 +1403,12 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir) {
     const head = part === 'head';
     let reward = 0;
     if (a.team !== v.team) { a.k++; reward = head ? cfg.headReward : cfg.killReward; }
-    else a.k = Math.max(0, a.k - 1); // team kill costs a point
+    else a.k = Math.max(0, a.k - 1); // team kill or blowing yourself up costs a point
     a.money = Math.min(cfg.maxMoney, a.money + reward);
     v.money = Math.max(0, v.money - cfg.deathPenalty);
     v.armor = 0; v.helmet = false;
-    hostBroadcast({ t:'kill', killer: a.id, victim: v.id, kn: a.name, kt: a.team, vn: v.name, vt: v.team, head, part, w, from: a.p,
+    if (cfg.loseWeapons) v.nades = 0;
+    hostBroadcast({ t:'kill', killer: a.id, victim: v.id, kn: a.name, kt: a.team, vn: v.name, vt: v.team, head, part, w, from: src || a.p,
       reward, penalty: cfg.deathPenalty });
     const score = { ct:0, t:0 }; for (const q of H.players.values()) score[q.team] += q.k;
     if (score[a.team] >= cfg.winKills) {
@@ -1135,13 +1420,43 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir) {
 }
 // new match: scores and money back to the start
 function hostRestart(text) {
-  for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; hostSpawn(q); }
+  for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; q.nades = 0; hostSpawn(q); }
   H.winLock = false;
   hostBroadcast({ t:'reset' });
   hostBroadcast({ t:'info', text });
 }
+// ---- grenades: the host flies its own copy and decides where and when it blows up
+let nadeSeq = 0;
+const hostNades = [];
+function hostThrow(from, o, v) {
+  const nid = from + ':' + (nadeSeq++);
+  hostNades.push({ nid, from, pos: new THREE.Vector3(...o), vel: new THREE.Vector3(...v), t: 0, acc: 0 });
+  hostBroadcast({ t:'nade', nid, id: from, o, v });
+}
+function hostExplode(n) {
+  const at = n.pos, power = cfg.nadePower / 100;
+  hostBroadcast({ t:'boom', nid: n.nid, p: [at.x, at.y, at.z] });
+  for (const v of [...H.players.values()]) {
+    if (!v.alive) continue;
+    const body = new THREE.Vector3(v.p[0], v.p[1] + 1.0, v.p[2]), head = body.clone(); head.y += 0.65;
+    const d = body.distanceTo(at);
+    if (d > NADE.radius) continue;
+    // a wall between you and the blast protects you; half-cover protects partly
+    const seen = (lineOfSight(at, body) ? 0.75 : 0) + (lineOfSight(at, head) ? 0.25 : 0);
+    if (!seen) continue;
+    const dmg = NADE.maxDmg * power * (1 - d / NADE.radius) * seen;
+    if (dmg < 1) continue;
+    const dir = body.clone().sub(at).normalize();
+    hostDamage(n.from, v.id, dmg, 'blast', 'grenade', [body.x, body.y, body.z], [dir.x, dir.y, dir.z], [at.x, at.y, at.z]);
+  }
+}
 function hostTick(dt) {
   for (const b of H.bots) botThink(b, dt);
+  for (let i = hostNades.length - 1; i >= 0; i--) {
+    const n = hostNades[i];
+    stepNade(n, dt);
+    if (n.t >= NADE.fuse) { hostNades.splice(i, 1); hostExplode(n); }
+  }
   H.snapTimer -= dt;
   if (H.snapTimer <= 0) {
     H.snapTimer = 0.05;
@@ -1177,10 +1492,9 @@ function fillAdmin() {
     const v = cfg[el.dataset.cfg];
     if (el.type === 'checkbox') el.checked = v; else el.value = v;
   });
-  $('#aBots').value = H.bots.length;
-  const row = (key, name) => `<label>${name}<span><input type="number" min="0" step="50" data-price="${key}" value="${cfg.prices[key]}">` +
+  const row =(key, name) => `<label>${name}<span><input type="number" min="0" step="50" data-price="${key}" value="${cfg.prices[key]}">` +
     (cfg.ammoPrices[key] !== undefined ? ` <input type="number" min="0" step="5" data-ammo="${key}" value="${cfg.ammoPrices[key]}" title="магазин патронов">` : '') + `</span></label>`;
-  $('#aPrices').innerHTML = [...BUY, 'kevlar', 'helmet'].map(k => row(k, ITEM_NAME[k])).join('');
+  $('#aPrices').innerHTML = [...BUY, 'kevlar', 'helmet', 'grenade'].map(k => row(k, ITEM_NAME[k])).join('');
   document.querySelectorAll('#aPrices input').forEach(el => el.onchange = () => {
     const v = Math.max(0, Math.round(+el.value || 0));
     if (el.dataset.price) cfg.prices[el.dataset.price] = v; else cfg.ammoPrices[el.dataset.ammo] = v;
@@ -1190,12 +1504,14 @@ function fillAdmin() {
 }
 function adminRefresh() {
   if (!adminOpen) return;
-  const rows = [...H.players.values()].filter(p => !p.bot);
-  $('#aPlayers').innerHTML = rows.map(p => `<tr><td class="n-${p.team}">${esc(p.name)}${p.id === myId ? ' (ты)' : ''}</td><td>${TEAM_NAME[p.team]}</td>` +
-    `<td style="color:#7ee787">$${p.money}</td><td>${p.k} / ${p.d}</td><td style="text-align:right">` +
-    `<button data-act="give" data-id="${p.id}">+$1000</button><button data-act="take" data-id="${p.id}">−$1000</button>` +
-    `<button data-act="zero" data-id="${p.id}">$0</button><button data-act="team" data-id="${p.id}">Сменить команду</button>` +
-    (p.id === myId ? '' : `<button data-act="kick" data-id="${p.id}">Выгнать</button>`) + `</td></tr>`).join('');
+  // people first, then bots
+  const rows = [...H.players.values()].sort((a, b) => (a.bot ? 1 : 0) - (b.bot ? 1 : 0));
+  $('#aPlayers').innerHTML = rows.map(p => `<tr><td class="n-${p.team}">${p.bot ? '🤖 ' : ''}${esc(p.name)}${p.id === myId ? ' (ты)' : ''}</td><td>${TEAM_NAME[p.team]}</td>` +
+    `<td style="color:#7ee787">${p.bot ? '' : '$' + p.money}</td><td>${p.k} / ${p.d}</td><td style="text-align:right">` +
+    (p.bot ? '' : `<button data-act="give" data-id="${p.id}">+$1000</button><button data-act="take" data-id="${p.id}">−$1000</button>` +
+      `<button data-act="zero" data-id="${p.id}">$0</button>`) +
+    `<button data-act="team" data-id="${p.id}">Сменить команду</button>` +
+    (p.bot ? `<button data-act="remove" data-id="${p.id}">Удалить</button>` : p.id === myId ? '' : `<button data-act="kick" data-id="${p.id}">Выгнать</button>`) + `</td></tr>`).join('');
   document.querySelectorAll('#aPlayers [data-act]').forEach(b => b.onclick = () => adminAction(b.dataset.act, b.dataset.id));
 }
 function adminAction(act, id) {
@@ -1203,9 +1519,11 @@ function adminAction(act, id) {
   if (act === 'give') p.money = Math.min(cfg.maxMoney, p.money + 1000);
   if (act === 'take') p.money = Math.max(0, p.money - 1000);
   if (act === 'zero') p.money = 0;
+  if (act === 'remove') removeBot(id);
   if (act === 'team') {
     p.team = p.team === 'ct' ? 't' : 'ct';
-    hostSend(id, { t:'team', team: p.team });
+    if (p.bot) p.w = DEFAULT_GUN[p.team];
+    else hostSend(id, { t:'team', team: p.team });
     hostBroadcast({ t:'info', text: `${p.name} теперь за «${TEAM_NAME[p.team]}»` });
     hostSpawn(p);
   }
@@ -1215,9 +1533,10 @@ function adminAction(act, id) {
   }
   adminRefresh();
 }
-function setBotCount(n) {
-  while (H.bots.length > n) { const b = H.bots.pop(); H.players.delete(b.id); }
-  while (H.bots.length < n) addBot(H.bots.length);
+function removeBot(id) {
+  const b = H.players.get(id); if (!b || !b.bot) return;
+  H.players.delete(id); H.bots.splice(H.bots.indexOf(b), 1);
+  hostBroadcast({ t:'info', text: b.name + ' удалён' });
 }
 document.querySelectorAll('#admin [data-cfg]').forEach(el => el.onchange = () => {
   const k = el.dataset.cfg;
@@ -1225,7 +1544,9 @@ document.querySelectorAll('#admin [data-cfg]').forEach(el => el.onchange = () =>
   if (k === 'winKills') cfg.winKills = Math.max(1, cfg.winKills);
   pushCfg();
 });
-$('#aBots').onchange = e => setBotCount(+e.target.value);
+$('#aBotCT').onclick = () => { addBot('ct'); adminRefresh(); };
+$('#aBotT').onclick = () => { addBot('t'); adminRefresh(); };
+$('#aBotsNone').onclick = () => { for (const b of [...H.bots]) removeBot(b.id); adminRefresh(); };
 $('#aRestart').onclick = () => { hostRestart('Админ начал новый матч!'); adminRefresh(); };
 $('#aDefaults').onclick = () => { cfg = structuredClone(DEFAULT_CFG); pushCfg(); fillAdmin(); };
 $('#adminClose').onclick = () => toggleAdmin(false);
@@ -1240,10 +1561,13 @@ function buildNav() {
     if (!colliders.some(b => b.min.y < 1 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
   }
 }
-function addBot(i) {
-  const team = i % 2 === 0 ? (myTeam === 'ct' ? 't' : 'ct') : myTeam;
-  const id = 'bot' + i;
-  const b = { id, bot:true, name: BOT_NAMES[i % BOT_NAMES.length], team, hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: DEFAULT_GUN[team], money:0, armor:0, helmet:false,
+let botSeq = 0;
+function addBot(team) {
+  const id = 'bot' + (botSeq++);
+  const used = new Set(H.bots.map(b => b.name));
+  const name = BOT_NAMES.find(n => !used.has(n)) || 'Робот ' + botSeq;
+  hostBroadcast({ t:'info', text: `${name} зашёл за команду «${TEAM_NAME[team]}»` });
+  const b = { id, bot:true, name, team, hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: DEFAULT_GUN[team], money:0, armor:0, helmet:false,
     pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw:0, goal:null, nextShot:0, seen:null, stuckT:0, lastPos: new THREE.Vector3(), strafe:1, strafeT:0 };
   H.players.set(id, b); H.bots.push(b);
   hostSpawn(b);
@@ -1350,7 +1674,8 @@ function clientHandle(m) {
     case 'bought': {
       me.money = m.money; me.armor = m.armor; me.helmet = m.helmet;
       const item = m.item;
-      if (item.startsWith('ammo:')) { const g = item.slice(5); me.reserve[g] = (me.reserve[g] || 0) + WEAPONS[g].mag; }
+      if (item === 'grenade') { me.nades = m.nades; me.loadout[4] = 'grenade'; }
+      else if (item.startsWith('ammo:')) { const g = item.slice(5); me.reserve[g] = (me.reserve[g] || 0) + WEAPONS[g].mag; }
       else if (WEAPONS[item]) { me.loadout[WEAPONS[item].slot] = item; giveWeapon(item); me.weapon = null; switchWeapon(item); }
       playSample('draw', 0.5);
       moneyPopup(-1, ITEM_NAME[item] || 'Патроны');
@@ -1362,6 +1687,13 @@ function clientHandle(m) {
     case 'team': myTeam = m.team; resetLoadout(); break;
     case 'kicked': showCenter('Создатель игры убрал тебя из игры.', 9999); started = false; document.exitPointerLock(); peer?.destroy(); break;
     case 'bl': bloodHit(m); break;
+    case 'nade': spawnNade(m); break;
+    case 'boom': {
+      const n = clientNades.get(m.nid);
+      if (n) { scene.remove(n.obj); clientNades.delete(m.nid); }
+      explosion(new THREE.Vector3(...m.p));
+      break;
+    }
     case 'dmg':
       me.hp = m.hp; me.armor = m.armor; me.helmet = m.helmet;
       $('#dmg').style.opacity = 1; setTimeout(() => $('#dmg').style.opacity = 0, 150);
@@ -1442,18 +1774,19 @@ addEventListener('mousedown', e => {
   if (!locked) return;
   if (e.button === 0) { me.firing = true; me.firedThisClick = false; }
   if (e.button === 2 && WEAPONS[me.weapon].zoom && !me.reloadEnd) setZoom(!me.zoom);
+  if (e.button === 2 && me.weapon === 'grenade') throwNade(true); // short underhand lob
 });
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mouseup', e => { if (e.button === 0) me.firing = false; });
 addEventListener('wheel', e => {
   if (!locked) return;
   let s = WEAPONS[me.weapon].slot;
-  do s = (s + (e.deltaY > 0 ? 0 : 1)) % 3 + 1; while (!me.loadout[s]); // skip empty slots
+  do s = (s + (e.deltaY > 0 ? 0 : 2)) % 4 + 1; while (!me.loadout[s]); // skip empty slots
   selectSlot(s);
 });
 // ---- buy menu (B), like in CS: the cursor appears, click or press the number
 let buyOpen = false;
-const BUY_KEYS = [...BUY, 'kevlar', 'helmet']; // 1..8; 9 = ammo for the gun in your hands
+const BUY_KEYS = [...BUY, 'kevlar', 'helmet', 'grenade']; // 1..9; 0 = ammo for the gun in your hands
 function toggleBuy(open) {
   if (open && !me.alive) return;
   buyOpen = open;
@@ -1469,11 +1802,12 @@ function renderBuyMenu() {
   const P = cfg.prices;
   const helmetPrice = me.armor >= 100 ? P.helmet - P.kevlar : P.helmet;
   const ammoBtns = [1, 2].map(s => me.loadout[s]).filter(Boolean).map(g =>
-    `<button data-item="ammo:${g}" ${!zone || me.money < cfg.ammoPrices[g] ? 'disabled' : ''}><b>${g === me.weapon ? 9 : ''}</b>Патроны ${WEAPONS[g].name} (+${WEAPONS[g].mag})<span class="price">$${cfg.ammoPrices[g]}</span></button>`).join('');
+    `<button data-item="ammo:${g}" ${!zone || me.money < cfg.ammoPrices[g] ? 'disabled' : ''}><b>${g === me.weapon ? 0 : ''}</b>Патроны ${WEAPONS[g].name} (+${WEAPONS[g].mag})<span class="price">$${cfg.ammoPrices[g]}</span></button>`).join('');
   $('#buyBody').innerHTML =
     `<div class="buycol"><h3>Винтовки и дробовик</h3>${['ak47','m4','shotgun','sniper'].map((g, i) => btn(i + 1, g, P[g], me.loadout[1] === g)).join('')}</div>` +
     `<div class="buycol"><h3>Пистолеты</h3>${['deagle','beretta'].map((g, i) => btn(i + 5, g, P[g], me.loadout[2] === g)).join('')}` +
-    `<h3 style="margin-top:12px">Снаряжение</h3>${btn(7, 'kevlar', P.kevlar, me.armor >= 100)}${btn(8, 'helmet', helmetPrice, me.armor >= 100 && me.helmet)}</div>` +
+    `<h3 style="margin-top:12px">Снаряжение</h3>${btn(7, 'kevlar', P.kevlar, me.armor >= 100)}${btn(8, 'helmet', helmetPrice, me.armor >= 100 && me.helmet)}` +
+    `${btn(9, 'grenade', P.grenade, me.nades >= cfg.maxNades)}</div>` +
     `<div class="buycol"><h3>Патроны</h3>${ammoBtns || '<span class="muted">Нет оружия</span>'}</div>`;
   $('#buyMoney').textContent = '$' + me.money;
   document.querySelectorAll('#buyBody [data-item]').forEach(b => b.onclick = () => buy(b.dataset.item));
@@ -1487,12 +1821,13 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyB') { toggleBuy(!buyOpen); return; }
   const n = +e.code.replace('Digit', '');
   if (buyOpen) {
-    if (n >= 1 && n <= 8) buy(BUY_KEYS[n - 1]);
-    if (n === 9 && me.weapon !== 'knife') buy('ammo:' + me.weapon);
+    if (n >= 1 && n <= 9) buy(BUY_KEYS[n - 1]);
+    if (e.code === 'Digit0' && cfg.ammoPrices[me.weapon] !== undefined) buy('ammo:' + me.weapon);
     if (e.code === 'Escape') toggleBuy(false);
     return;
   }
-  if (n >= 1 && n <= 3) selectSlot(n);
+  if (n >= 1 && n <= 4) selectSlot(n);
+  if (e.code === 'KeyG' && me.nades > 0) selectSlot(4);
   if (e.code === 'KeyR') startReload();
 });
 addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Tab') showBoard = false; });
@@ -1514,7 +1849,7 @@ function setZoom(on) {
 const RELOAD_SND = { ak47:'reload_rifle', m4:'reload_rifle', shotgun:'pump', sniper:'bolt', deagle:'reload_pistol', beretta:'reload_pistol' };
 function startReload() {
   const w = WEAPONS[me.weapon];
-  if (me.weapon === 'knife' || me.reloadEnd || me.ammo[me.weapon] >= w.mag || !me.alive) return;
+  if (me.weapon === 'knife' || me.weapon === 'grenade' || me.reloadEnd || me.ammo[me.weapon] >= w.mag || !me.alive) return;
   if (!cfg.infAmmo && !me.reserve[me.weapon]) { showCenter('<small>Патроны кончились — купи на базе (B)</small>', 1.5); return; }
   me.reloadEnd = now() + w.reload; setZoom(false);
   if (!playSample(RELOAD_SND[me.weapon], 0.6)) beep(300, .05, .08);
@@ -1526,6 +1861,7 @@ function tryFire() {
   const t = now(), w = WEAPONS[me.weapon];
   if (!me.alive || me.reloadEnd || t - me.lastShot < w.rate) return;
   if (!w.auto && me.firedThisClick) return;
+  if (me.weapon === 'grenade') { me.firedThisClick = true; me.lastShot = t; throwNade(false); return; }
   if (me.ammo[me.weapon] <= 0) { if (!playSample('empty', 0.5)) beep(900, .03, .06); startReload(); me.firedThisClick = true; return; }
   me.lastShot = t; me.firedThisClick = true;
   if (me.weapon !== 'knife') me.ammo[me.weapon]--;
@@ -1619,7 +1955,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, toggleAdmin, killEffect, H, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, toggleAdmin, killEffect, H, hostThrow, explosion, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
@@ -1669,10 +2005,13 @@ function frame() {
       if (me.onGround && hs > 4) { me.stepDist += hs * dt; if (me.stepDist > 1.8) { me.stepDist = 0; playSample('step' + (1 + Math.floor(Math.random() * 4)), 0.12); } }
     }
     camera.position.set(me.pos.x, me.pos.y + (me.alive ? EYE : 0.4), me.pos.z);
-    camera.rotation.set(me.pitch, me.yaw, me.alive ? 0 : 0.5);
+    // explosions shake the camera
+    const sh = shake * shake * 12;
+    camera.rotation.set(me.pitch + (Math.random() - .5) * sh, me.yaw + (Math.random() - .5) * sh, (me.alive ? 0 : 0.5) + (Math.random() - .5) * sh);
 
     // viewmodel: sway, recoil, reload dip, weapon draw
-    for (const k in vmModels) vmModels[k].visible = me.alive && k === me.weapon && !me.zoom;
+    nadeHideT = Math.max(0, nadeHideT - dt);
+    for (const k in vmModels) vmModels[k].visible = me.alive && k === me.weapon && !me.zoom && !(k === 'grenade' && nadeHideT > 0);
     vmKick = Math.max(0, vmKick - dt * 0.5);
     drawT = Math.max(0, drawT - dt);
     const dip = (me.reloadEnd ? 0.12 : 0) + drawT * 0.4;
@@ -1727,8 +2066,10 @@ function frame() {
     $('#hp').classList.toggle('low', me.hp <= 30);
     const w = WEAPONS[me.weapon];
     $('#wname').textContent = w.name + (me.reloadEnd ? ' — перезарядка' : '');
-    $('#ammov').textContent = me.weapon === 'knife' ? '—' : me.ammo[me.weapon];
-    $('#ammor').textContent = me.weapon === 'knife' ? '' : '/ ' + (cfg.infAmmo ? '∞' : me.reserve[me.weapon] ?? 0);
+    const melee = me.weapon === 'knife' || me.weapon === 'grenade';
+    $('#ammov').textContent = me.weapon === 'grenade' ? '×' + me.nades : melee ? '—' : me.ammo[me.weapon];
+    $('#ammor').textContent = melee ? '' : '/ ' + (cfg.infAmmo ? '∞' : me.reserve[me.weapon] ?? 0);
+    $('#nades').textContent = me.nades > 0 && me.weapon !== 'grenade' ? `Граната ×${me.nades} — клавиша 4` : '';
     $('#money').textContent = '$' + me.money;
     $('#arm').style.display = me.armor > 0 ? 'flex' : 'none';
     $('#armv').textContent = me.armor; $('#helm').style.display = me.helmet ? 'inline' : 'none';
@@ -1749,6 +2090,8 @@ function frame() {
   }
 
   updateGore(dt);
+  updateNades(dt);
+  updateExplosions(dt);
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i];
     f.t -= dt;
@@ -1764,6 +2107,7 @@ function frame() {
 }
 renderer.setAnimationLoop(frame);
 window.__ks.frame = frame;
+window.__ks.renderer = renderer;
 </script>
 </body>
 </html>
