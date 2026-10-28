@@ -58,6 +58,7 @@
   #feed .me { border-color:#d23; }
   .n-ct { color:#8ab8ff; } .n-t { color:#f2c06e; }
   #flash { position:absolute; inset:0; background:radial-gradient(circle, #fff8e0, #ffd9a0 60%, #ffb060); opacity:0; mix-blend-mode:screen; }
+  #nadehint { position:absolute; left:50%; top:58%; transform:translateX(-50%); font-size:18px; font-weight:700; color:#ffd27a; display:none; }
   #nades { font-size:16px; color:#cfd6df; font-weight:600; }
   #dmg { position:absolute; inset:0; box-shadow:inset 0 0 160px rgba(200,0,0,.8); opacity:0; transition:opacity .35s; }
   #center { position:absolute; left:50%; top:28%; transform:translateX(-50%); text-align:center; font-size:34px; font-weight:700; }
@@ -159,7 +160,7 @@
       <b>W A S D</b> бег &nbsp; <b>Пробел</b> прыжок &nbsp; <b>Shift</b> шаг<br>
       <b>ЛКМ</b> огонь &nbsp; <b>ПКМ</b> прицел снайперки &nbsp; <b>R</b> перезарядка<br>
       <b>1</b> основное <b>2</b> пистолет <b>3</b> нож <b>4</b> граната &nbsp; <b>B</b> магазин (на своей базе)<br>
-      Граната: <b>ЛКМ</b> бросок далеко, <b>ПКМ</b> бросок под ноги<br>
+      Граната: зажми <b>ЛКМ</b> и отпусти — бросок далеко, <b>ПКМ</b> — под ноги<br>
       <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Деньги: убийство +$500, в голову +$1000, смерть — штраф.
     </div>
     <button id="adminBtn" style="width:100%;margin-top:14px;display:none">⚙ Админ-панель</button>
@@ -218,6 +219,7 @@
   <div id="money">$0</div>
   <div id="moneypops"></div>
   <div id="buyhint">B — магазин</div>
+  <div id="nadehint">Чека выдернута — отпусти кнопку, чтобы бросить</div>
   <div id="hp"><span class="plus">✚</span><span id="hpv">100</span><div class="meter"><div id="hpbar" style="width:100%"></div></div>
     <span id="arm"><span class="shield">⛉</span><span id="armv">0</span><span id="helm">⛑</span></span></div>
   <div id="ammo"><div id="nades"></div><div id="wname">Винтовка</div><div class="num"><span id="ammov">30</span> <small id="ammor">/ 90</small></div></div>
@@ -277,7 +279,7 @@ const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
 const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
 const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3;
-const PEER_PREFIX = 'kidstrike-v4-'; // bump when the network messages change, so old tabs can't join new games
+const PEER_PREFIX = 'kidstrike-v5-'; // bump when the network messages change, so old tabs can't join new games
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
 
 const $ = s => document.querySelector(s);
@@ -434,7 +436,40 @@ function pbr(name, tile) {
   const arm = t('arm'); // R = ambient occlusion, G = roughness, B = metalness
   const m = new THREE.MeshStandardMaterial({ map, normalMap: t('nor'), aoMap: arm, roughnessMap: arm, metalnessMap: arm, roughness: 1, metalness: 1 });
   m.userData.tile = tile;
+  worldUV(m, tile);
   return m;
+}
+// texture coordinates taken from the world position: a wall broken into blocks keeps exactly the same pattern
+function worldUV(m, tile) {
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uTile = { value: 1 / tile };
+    sh.vertexShader = 'uniform float uTile;\n' + sh.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>
+      {
+        mat4 wm = modelMatrix;
+        #ifdef USE_INSTANCING
+          wm = modelMatrix * instanceMatrix;
+        #endif
+        vec3 wp = (wm * vec4(position, 1.0)).xyz;
+        vec3 wn = abs(normalize(mat3(wm) * normal));
+        vec2 wuv = (wn.x > wn.y && wn.x > wn.z ? wp.zy : (wn.y > wn.z ? wp.xz : wp.xy)) * uTile;
+        #ifdef USE_MAP
+          vMapUv = wuv;
+        #endif
+        #ifdef USE_NORMALMAP
+          vNormalMapUv = wuv;
+        #endif
+        #ifdef USE_AOMAP
+          vAoMapUv = wuv;
+        #endif
+        #ifdef USE_ROUGHNESSMAP
+          vRoughnessMapUv = wuv;
+        #endif
+        #ifdef USE_METALNESSMAP
+          vMetalnessMapUv = wuv;
+        #endif
+      }`);
+  };
+  m.customProgramCacheKey = () => 'worlduv' + tile;
 }
 const MAT = {
   ground:   pbr('ground', 4),
@@ -459,9 +494,14 @@ function boxGeo(w, h, d, tile) {
 
 // ================= map =================
 // [x, z, width(x), depth(z), height, material, baseY]
+// the outer border can't be destroyed (it keeps everyone on the map)
 const MAP = [
   [0,-40.5,82,1,7,'outer'], [0,40.5,82,1,7,'outer'], [-40.5,0,1,82,7,'outer'], [40.5,0,1,82,7,'outer'],
-  [0,0,8,8,5,'wall'],
+];
+// everything else is built from blocks and can be shot through and blown up
+const WALLS = [
+  // the house in the middle: four walls around an empty yard
+  [0,-3.6,8,0.8,5,'wall'], [0,3.6,8,0.8,5,'wall'], [-3.6,0,0.8,6.4,5,'wall'], [3.6,0,0.8,6.4,5,'wall'],
   [-20,-14,14,1.5,5,'wall'], [20,14,14,1.5,5,'wall'],
   [-8,-23,1.5,10,5,'outer'], [8,23,1.5,10,5,'outer'],
   [-26,6,1.5,16,5,'wall'], [26,-6,1.5,16,5,'wall'],
@@ -469,40 +509,209 @@ const MAP = [
   [-31,23,10,1.5,4,'wall'], [31,-23,10,1.5,4,'wall'],
   [-4,-28,10,1.5,2.2,'low'], [4,28,10,1.5,2.2,'low'],
 ];
-// stone caps on top of walls, like the trims in desert maps
-const TRIMS = MAP.filter(b => b[5] === 'wall' || b[5] === 'blue').map(([x, z, w, d, h]) => [x, z, w + 0.3, d + 0.3, 0.25, 'concrete', h]);
 // [x, z] spots for crate stacks
-const CRATES = [[-4,-14],[4,14],[16,-20],[-16,20],[-20,0],[20,0],[-33,-30],[33,30],[30,10],[-30,-10],[-14,-34],[14,34],[6,-8],[-6,8]];
+const CRATES = [[-4,-14],[4,14],[16,-20],[-16,20],[-20,0],[20,0],[-33,-30],[33,30],[30,10],[-30,-10],[-14,-34],[14,34],[6,-8],[-6,8],[-1.4,-0.6]];
+
+// ---- how materials resist (real-life inspired): plaster/adobe is soft, sandstone is hard, the stone cap is in between
+const CELL = 0.5;                                                          // wall block size, metres
+const WALL_HP = { wall: 260, blue: 240, outer: 420, low: 380, trim: 220 }; // what a block takes before it breaks
+const BLAST_HOLE = { wall: 1.75, blue: 1.75, outer: 1.15, low: 1.3 };     // hole radius from a grenade, metres
+// bullet power against walls: bigger calibre chips more and breaks through sooner
+const PEN = { beretta: 14, m4: 28, ak47: 38, deagle: 55, sniper: 140, shotgun: 8, knife: 0 };
+// bullet hole size in metres: 9 mm < 5.56 < 7.62 < .50 AE < sniper round
+const HOLE = { beretta: 0.045, m4: 0.055, ak47: 0.07, deagle: 0.085, sniper: 0.11, shotgun: 0.035 };
+
+const walls = [];
+class Wall {
+  constructor(id, [x, z, w, d, h, type]) {
+    Object.assign(this, { id, x, z, w, d, h, type });
+    this.along = w >= d ? 'x' : 'z';
+    const L = Math.max(w, d);
+    this.T = Math.min(w, d);
+    this.n = Math.max(1, Math.round(L / CELL)); this.cl = L / this.n;          // columns along the wall
+    this.m = Math.max(1, Math.round(h / CELL)); this.ch = h / this.m;          // rows of blocks
+    this.trim = type === 'wall' || type === 'blue';                            // stone cap on top
+    this.R = this.m + (this.trim ? 1 : 0);
+    const N = this.n * this.R;
+    this.alive = new Uint8Array(N).fill(1);
+    this.hp = new Float32Array(N);
+    for (let c = 0; c < N; c++) this.hp[c] = this.row(c) === this.m ? WALL_HP.trim : WALL_HP[type];
+    this.decals = new Map(); // block -> bullet holes on it
+    this.boxes = [];
+    // one instanced mesh for the wall blocks, one for the cap
+    this.meshes = [this.makeMesh(this.n * this.m, MAT[type]), this.trim ? this.makeMesh(this.n, MAT.concrete) : null];
+    this.inst = [[], []]; this.slot = new Int32Array(N).fill(-1);
+    const mtx = new THREE.Matrix4(), white = new THREE.Color(1, 1, 1);
+    for (let c = 0; c < N; c++) {
+      const k = this.row(c) === this.m ? 1 : 0, im = this.meshes[k];
+      this.slot[c] = this.inst[k].length; this.inst[k].push(c);
+      im.setMatrixAt(this.slot[c], this.cellMatrix(c, mtx)); im.setColorAt(this.slot[c], white);
+    }
+    for (const im of this.meshes) if (im) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.computeBoundingBox(); }
+    this.rebuildColliders();
+  }
+  makeMesh(count, mat) {
+    const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, count);
+    im.castShadow = im.receiveShadow = true;
+    im.userData = { wall: this, mat: 'stone' };
+    scene.add(im); worldMeshes.push(im);
+    return im;
+  }
+  row(c) { return Math.floor(c / this.n); }
+  col(c) { return c % this.n; }
+  rowY(j) { return j < this.m ? [j * this.ch, (j + 1) * this.ch] : [this.h, this.h + 0.25]; }
+  cellBox(c, box = new THREE.Box3()) {
+    const i = this.col(c), [y0, y1] = this.rowY(this.row(c));
+    const a0 = (this.along === 'x' ? this.x - this.w / 2 : this.z - this.d / 2) + i * this.cl, a1 = a0 + this.cl;
+    const t = this.row(c) === this.m ? this.T / 2 + 0.15 : this.T / 2;
+    const c0 = (this.along === 'x' ? this.z : this.x) - t, c1 = c0 + 2 * t;
+    return this.along === 'x' ? box.set(new THREE.Vector3(a0, y0, c0), new THREE.Vector3(a1, y1, c1)) : box.set(new THREE.Vector3(c0, y0, a0), new THREE.Vector3(c1, y1, a1));
+  }
+  cellCenter(c) { return this.cellBox(c).getCenter(new THREE.Vector3()); }
+  cellMatrix(c, mtx) {
+    const b = this.cellBox(c), s = b.getSize(new THREE.Vector3());
+    return mtx.compose(b.getCenter(new THREE.Vector3()), new THREE.Quaternion(), s);
+  }
+  // remove blocks (safe to call twice); returns the ones that were really removed
+  kill(cells) {
+    const done = [];
+    for (const c of cells) {
+      if (!this.alive[c]) continue;
+      this.alive[c] = 0; done.push(c);
+      const k = this.row(c) === this.m ? 1 : 0, im = this.meshes[k], list = this.inst[k];
+      const s = this.slot[c], last = list.length - 1, moved = list[last];
+      if (s !== last) { // move the last block into the freed slot
+        const mtx = new THREE.Matrix4(), col = new THREE.Color();
+        im.getMatrixAt(last, mtx); im.setMatrixAt(s, mtx);
+        im.getColorAt(last, col); im.setColorAt(s, col);
+        list[s] = moved; this.slot[moved] = s;
+      }
+      list.pop(); this.slot[c] = -1; im.count = list.length;
+      im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true;
+      for (const d of this.decals.get(c) || []) { scene.remove(d); const i = holes.indexOf(d); if (i >= 0) holes.splice(i, 1); }
+      this.decals.delete(c);
+    }
+    if (done.length) this.rebuildColliders();
+    return done;
+  }
+  // cracked blocks get darker
+  crack(c, amount) {
+    if (!this.alive[c]) return;
+    const k = this.row(c) === this.m ? 1 : 0, im = this.meshes[k], col = new THREE.Color();
+    im.getColorAt(this.slot[c], col); col.multiplyScalar(1 - amount);
+    im.setColorAt(this.slot[c], col); im.instanceColor.needsUpdate = true;
+  }
+  // which blocks fall down:
+  //  1) masonry over a hole holds like an arch only over a short span: a block more than 2 blocks (1 m)
+  //     away from a column that still stands on the ground under it collapses — wide holes cave in from the middle;
+  //  2) anything no longer connected to the ground through other blocks falls.
+  unsupported() {
+    const n = this.n, solid = this.alive.slice();
+    const ground = new Int32Array(n); // how high each column stands unbroken from the ground
+    for (let i = 0; i < n; i++) { let j = 0; while (j < this.R && solid[j * n + i]) j++; ground[i] = j; }
+    for (let c = 0; c < solid.length; c++) {
+      if (!solid[c]) continue;
+      const i = this.col(c), j = this.row(c);
+      if (j < ground[i]) continue;
+      let near = false;
+      for (let k = 1; k <= 2 && !near; k++) near = (i - k >= 0 && ground[i - k] > j) || (i + k < n && ground[i + k] > j);
+      if (!near) solid[c] = 0;
+    }
+    const seen = new Uint8Array(solid.length), stack = [];
+    for (let i = 0; i < n; i++) if (solid[i]) { seen[i] = 1; stack.push(i); }
+    while (stack.length) {
+      const c = stack.pop(), i = this.col(c), j = this.row(c);
+      for (const [di, dj] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const ni = i + di, nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= this.n || nj >= this.R) continue;
+        const nc = nj * this.n + ni;
+        if (solid[nc] && !seen[nc]) { seen[nc] = 1; stack.push(nc); }
+      }
+    }
+    const out = [];
+    for (let c = 0; c < this.alive.length; c++) if (this.alive[c] && !seen[c]) out.push(c);
+    return out;
+  }
+  // collision boxes: vertical runs of blocks per column, neighbouring columns with the same runs merged
+  rebuildColliders() {
+    for (const b of this.boxes) { const i = colliders.indexOf(b); if (i >= 0) colliders.splice(i, 1); }
+    this.boxes = [];
+    let group = null;
+    const flush = g => {
+      if (!g) return;
+      for (const [j0, j1] of g.runs) {
+        const b = this.cellBox(j0 * this.n + g.i0).union(this.cellBox(j1 * this.n + g.i1));
+        if (j1 === this.m) { const top = this.cellBox(j1 * this.n + g.i0); b.max.y = top.max.y; }
+        // the cap overhangs; collide only with the wall's own thickness
+        const t = this.T / 2, mid = this.along === 'x' ? this.z : this.x;
+        if (this.along === 'x') { b.min.z = mid - t; b.max.z = mid + t; } else { b.min.x = mid - t; b.max.x = mid + t; }
+        this.boxes.push(b);
+      }
+    };
+    for (let i = 0; i < this.n; i++) {
+      const runs = []; let start = -1;
+      for (let j = 0; j <= this.R; j++) {
+        const a = j < this.R && this.alive[j * this.n + i];
+        if (a && start < 0) start = j;
+        if (!a && start >= 0) { runs.push([start, j - 1]); start = -1; }
+      }
+      const key = runs.join(';');
+      if (group && group.key === key) group.i1 = i;
+      else { flush(group); group = { key, runs, i0: i, i1: i }; }
+    }
+    flush(group);
+    colliders.push(...this.boxes);
+  }
+}
+
+// ---- props that can be shot or blown apart
+const props = [];
+const PROP_KIND = { wooden_military_crate:'crate', wooden_crate_02:'crate', barrel_03:'barrel', metal_jerrycan:'jerrycan', cardboard_box_01:'cardboard', door:'door' };
+const PROP_HP = { crate: 260, cardboard: 30, jerrycan: 25, barrel: Infinity, door: 220 };
+const PROP_MAT = { crate:'wood', cardboard:'cardboard', jerrycan:'metal', barrel:'metal', door:'wood' };
+// box = its collision box when solid; non-solid props still get a box for blast checks
+function registerProp(obj, kind, box) {
+  const id = props.length;
+  const solid = !!box;
+  obj.updateMatrixWorld(true);
+  props.push({ id, obj, kind, box: box || new THREE.Box3().setFromObject(obj), solid, hp: PROP_HP[kind], alive: true, y0: obj.position.y,
+    pos0: obj.position.clone(), rot0: obj.rotation.clone(), scale0: obj.scale.clone() });
+  obj.traverse(c => { if (c.isMesh) c.userData = { prop: id, mat: PROP_MAT[kind] }; });
+}
 const SPAWNS = { ct: [], t: [] };
 for (let i = -3; i <= 3; i++) { SPAWNS.ct.push([i*3, -35]); SPAWNS.t.push([i*3, 35]); }
 
 const colliders = [], worldMeshes = [];
 function addCollider(obj) {
   obj.updateMatrixWorld(true);
-  colliders.push(new THREE.Box3().setFromObject(obj));
+  const b = new THREE.Box3().setFromObject(obj);
+  colliders.push(b);
+  return b;
 }
 function buildMap() {
   const ground = new THREE.Mesh(boxGeo(82, 0.2, 82, MAT.ground.userData.tile), MAT.ground);
-  ground.position.y = -0.1; ground.receiveShadow = true;
+  ground.position.y = -0.1; ground.receiveShadow = true; ground.userData = { mat: 'sand' };
   scene.add(ground); worldMeshes.push(ground);
-  for (const [x, z, w, d, h, type, y0 = 0] of [...MAP, ...TRIMS]) {
+  for (const [x, z, w, d, h, type, y0 = 0] of MAP) {
     const m = new THREE.Mesh(boxGeo(w, h, d, MAT[type].userData.tile), MAT[type]);
-    m.position.set(x, y0 + h/2, z); m.castShadow = m.receiveShadow = true;
+    m.position.set(x, y0 + h/2, z); m.castShadow = m.receiveShadow = true; m.userData = { mat: 'stone' };
     scene.add(m); worldMeshes.push(m);
-    if (type !== 'concrete') addCollider(m);
+    addCollider(m);
   }
+  WALLS.forEach((def, i) => walls.push(new Wall(i, def)));
   // blue doors on the long walls
   for (const [x, z, rot] of [[-20,-13.2,0],[20,13.2,Math.PI],[-25.2,6,Math.PI/2],[25.2,-6,-Math.PI/2]]) {
     const door = new THREE.Mesh(boxGeo(2.2, 3.2, 0.12, 2.5), MAT.blue);
     door.position.set(x, 1.6, z); door.rotation.y = rot; door.castShadow = door.receiveShadow = true;
     scene.add(door); worldMeshes.push(door);
+    registerProp(door, 'door', null);
   }
   const place = (name, scale, x, y, z, rotY = 0, solid = true) => {
-    const o = MODELS[name].clone();
+    const o = MODELS[name].clone(true);
     o.scale.setScalar(scale); o.position.set(x, y, z); o.rotation.y = rotY;
     o.traverse(c => { if (c.isMesh) { c.castShadow = c.receiveShadow = true; worldMeshes.push(c); } });
     scene.add(o);
-    if (solid) addCollider(o);
+    registerProp(o, PROP_KIND[name], solid ? addCollider(o) : null);
     return o;
   };
   CRATES.forEach(([x, z], i) => {
@@ -688,24 +897,6 @@ flash.scale.setScalar(0.22); flash.visible = false; vmCam.add(flash);
 
 // ================= effects =================
 const fx = [];
-const HOLE_TEX = (() => {
-  const c = document.createElement('canvas'); c.width = c.height = 32;
-  const g = c.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-  gr.addColorStop(0, 'rgba(10,8,6,1)'); gr.addColorStop(0.35, 'rgba(25,20,15,.9)'); gr.addColorStop(0.6, 'rgba(60,50,40,.35)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-})();
-const holeGeo = new THREE.PlaneGeometry(0.11, 0.11);
-const holeMat = new THREE.MeshBasicMaterial({ map: HOLE_TEX, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-4 });
-const holes = [];
-function bulletHole(point, normal) {
-  const m = new THREE.Mesh(holeGeo, holeMat);
-  m.position.copy(point).addScaledVector(normal, 0.01);
-  m.lookAt(point.clone().add(normal));
-  m.rotation.z = Math.random() * 6.28;
-  scene.add(m); holes.push(m);
-  if (holes.length > 80) scene.remove(holes.shift());
-}
 function dustPuff(point) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: DUST_TEX, transparent:true, depthWrite:false }));
   s.position.copy(point); s.scale.setScalar(0.15);
@@ -983,9 +1174,10 @@ function puff(tex, pos, vel, opts) {
   scene.add(s);
   return { s, vel, age: -(opts.delay || 0), ...opts };
 }
-function explosion(at) {
+function explosion(at, s = 1) {
   const parts = [];
   const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const sz = Math.sqrt(s); // smaller blasts (fuel cans) are smaller fireballs
   // blinding flash + light that lights up walls around
   const light = new THREE.PointLight(0xffa040, 0, 30, 1.6); light.position.copy(at).add(v3(0, 1, 0)); scene.add(light);
   parts.push({ light, age: 0, life: 0.5 });
@@ -993,8 +1185,8 @@ function explosion(at) {
   // fireball: billowing orange clouds pushed outwards and up
   for (let i = 0; i < 28; i++) {
     const dir = v3(Math.random() - .5, Math.random() * 1.3 + 0.3, Math.random() - .5).normalize();
-    parts.push(puff(FIRE_TEX, at.clone().addScaledVector(dir, 0.3), dir.multiplyScalar(3 + Math.random() * 6),
-      { add: false, size: 1 + Math.random(), grow: 2.5, life: 0.6 + Math.random() * 0.6, drag: 3.5, hdr: 1.6, cool: true }));
+    parts.push(puff(FIRE_TEX, at.clone().addScaledVector(dir, 0.3), dir.multiplyScalar((3 + Math.random() * 6) * sz),
+      { add: false, size: (1 + Math.random()) * sz, grow: 2.5, life: 0.6 + Math.random() * 0.6, drag: 3.5, hdr: 1.6, cool: true }));
   }
   // smoke column that keeps rising for a few seconds
   for (let i = 0; i < 26; i++) {
@@ -1032,13 +1224,13 @@ function explosion(at) {
   booms.push(parts);
   // camera shake, flash and push for whoever is close
   const d = camera.position.distanceTo(at);
-  shake = Math.max(shake, Math.max(0, 1 - d / 35) * 0.09);
+  shake = Math.max(shake, Math.max(0, 1 - d / 35) * 0.09 * sz);
   const toCam = camera.position.clone().sub(at).normalize(), look = new THREE.Vector3(); camera.getWorldDirection(look);
   const facing = Math.max(0, -toCam.dot(look));
   $('#flash').style.transition = 'none'; $('#flash').style.opacity = Math.max(0, 1 - d / 25) * (0.35 + 0.65 * facing);
   setTimeout(() => { $('#flash').style.transition = 'opacity 0.9s'; $('#flash').style.opacity = 0; }, 30);
   if (me.alive && d < NADE.radius) me.vel.add(toCam.multiplyScalar((1 - d / NADE.radius) * 9)).add(new THREE.Vector3(0, 3 * (1 - d / NADE.radius), 0));
-  playExplosion(d);
+  playExplosion(d, s);
 }
 function updateExplosions(dt) {
   for (let b = booms.length - 1; b >= 0; b--) {
@@ -1088,7 +1280,7 @@ function updateExplosions(dt) {
 // the boom: recorded blast + long rumble, a synthesised sub-bass drop, a sharp crack, falling debris and an echo off the map.
 // Sound travels at 343 m/s, so a far explosion is heard a moment after you see it.
 let REVERB = null;
-function playExplosion(dist) {
+function playExplosion(dist, s = 1) {
   if (MUTED) return;
   const a = audio(), t0 = a.currentTime + dist / 343;
   if (!REVERB) {
@@ -1099,7 +1291,7 @@ function playExplosion(dist) {
     }
   }
   const comp = a.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.4;
-  const master = a.createGain(); master.gain.value = Math.min(1.6, 2.4 / (1 + dist * 0.07));
+  const master = a.createGain(); master.gain.value = Math.min(1.6, 2.4 / (1 + dist * 0.07)) * (0.45 + 0.55 * s);
   const muffle = a.createBiquadFilter(); muffle.type = 'lowpass'; muffle.frequency.value = 20000 / (1 + dist * 0.09);
   master.connect(muffle).connect(comp).connect(a.destination);
   const verb = a.createConvolver(); verb.buffer = REVERB;
@@ -1141,6 +1333,481 @@ function playClink(vol, dist) {
   }
 }
 
+// ================= destruction =================
+// ---- small particle clouds: stone chips, wood splinters, sparks
+const DOT_TEX = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.beginPath(); g.arc(8, 8, 6, 0, 6.28); g.fill();
+  return new THREE.CanvasTexture(c);
+})();
+class Cloud {
+  constructor(max, color, size, additive, gravity) {
+    this.max = max; this.g = gravity; this.next = 0;
+    this.pos = new Float32Array(max * 3).fill(-999); this.vel = new Float32Array(max * 3); this.life = new Float32Array(max);
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    this.points = new THREE.Points(geo, new THREE.PointsMaterial({ map: DOT_TEX, color, size, transparent: true, depthWrite: false, alphaTest: 0.3,
+      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
+    this.points.frustumCulled = false; scene.add(this.points);
+  }
+  spawn(at, dir, count, speed, spread, life = 1.2) {
+    for (let i = 0; i < count; i++) {
+      const k = this.next; this.next = (this.next + 1) % this.max;
+      this.pos[k*3] = at.x; this.pos[k*3+1] = at.y; this.pos[k*3+2] = at.z;
+      const s = speed * (0.4 + Math.random() * 0.8);
+      this.vel[k*3] = dir.x * s + (Math.random() - .5) * spread; this.vel[k*3+1] = dir.y * s + Math.random() * spread; this.vel[k*3+2] = dir.z * s + (Math.random() - .5) * spread;
+      this.life[k] = life * (0.6 + Math.random() * 0.6);
+    }
+  }
+  update(dt) {
+    for (let k = 0; k < this.max; k++) {
+      if (this.life[k] <= 0) continue;
+      this.life[k] -= dt; this.vel[k*3+1] -= this.g * dt;
+      this.pos[k*3] += this.vel[k*3] * dt; this.pos[k*3+1] += this.vel[k*3+1] * dt; this.pos[k*3+2] += this.vel[k*3+2] * dt;
+      if (this.pos[k*3+1] < 0.02) { this.pos[k*3+1] = 0.02; this.vel[k*3] *= 0.5; this.vel[k*3+1] *= -0.25; this.vel[k*3+2] *= 0.5; }
+      if (this.life[k] <= 0) this.pos[k*3+1] = -999;
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+  }
+}
+const CHIPS = {
+  stone: new Cloud(500, 0xc9b48e, 0.05, false, 9.8),
+  sand:  new Cloud(200, 0xc8a774, 0.04, false, 9.8),
+  wood:  new Cloud(300, 0x8a5a30, 0.05, false, 9.8),
+  paper: new Cloud(150, 0xa8875a, 0.06, false, 3),
+  spark: new Cloud(300, new THREE.Color(5, 3.2, 1.2), 0.045, true, 9.8),
+};
+
+// ---- bullet holes: what a hole looks like depends on what it hit
+function holeTexture(draw) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  draw(c.getContext('2d'));
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const HOLE_TEX = {
+  // plaster/stone: dark crater with a ring of chipped, lighter material around it
+  stone: holeTexture(g => {
+    for (let i = 0; i < 14; i++) { const a = Math.random() * 6.28, r = 12 + Math.random() * 14;
+      g.fillStyle = `rgba(235,220,190,${0.35 + Math.random() * 0.3})`; g.beginPath(); g.arc(32 + Math.cos(a) * r, 32 + Math.sin(a) * r, 3 + Math.random() * 6, 0, 6.28); g.fill(); }
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 18); gr.addColorStop(0, 'rgba(15,10,6,1)'); gr.addColorStop(0.55, 'rgba(60,45,30,.95)'); gr.addColorStop(1, 'rgba(90,70,50,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 18, 0, 6.28); g.fill();
+  }),
+  // wood: dark hole with splinters torn outwards
+  wood: holeTexture(g => {
+    g.strokeStyle = 'rgba(205,160,105,.85)'; g.lineWidth = 2;
+    for (let i = 0; i < 9; i++) { const a = Math.random() * 6.28, r = 10 + Math.random() * 16; g.beginPath(); g.moveTo(32, 32); g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r * 0.5); g.stroke(); }
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 12); gr.addColorStop(0, 'rgba(20,10,4,1)'); gr.addColorStop(0.7, 'rgba(50,28,12,.9)'); gr.addColorStop(1, 'rgba(50,28,12,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 12, 0, 6.28); g.fill();
+  }),
+  // metal: shiny dented ring, the paint knocked off, a small dark puncture
+  metal: holeTexture(g => {
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 22); gr.addColorStop(0, 'rgba(10,10,10,1)'); gr.addColorStop(0.3, 'rgba(40,40,42,1)');
+    gr.addColorStop(0.45, 'rgba(220,222,225,.95)'); gr.addColorStop(0.75, 'rgba(160,160,165,.5)'); gr.addColorStop(1, 'rgba(120,120,120,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 22, 0, 6.28); g.fill();
+  }),
+};
+HOLE_TEX.cardboard = HOLE_TEX.wood; HOLE_TEX.sand = HOLE_TEX.stone;
+const HOLE_MAT = Object.fromEntries(Object.entries(HOLE_TEX).map(([k, t]) => [k, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })]));
+const holeGeo = new THREE.PlaneGeometry(1, 1);
+const holes = [];
+const _v = new THREE.Vector3();
+// everything that happens where a bullet lands: hole, chips/splinters/sparks, a puff of dust, a sound
+function impactAt(hit, w, dir) {
+  const ud = hit.object.userData || {}, mat = ud.mat || 'stone';
+  const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize() : dir.clone().negate();
+  const size = (HOLE[w] || 0.05) * (0.85 + Math.random() * 0.3) * (mat === 'sand' ? 2.2 : mat === 'metal' ? 0.8 : 1);
+  const d = new THREE.Mesh(holeGeo, HOLE_MAT[mat] || HOLE_MAT.stone);
+  d.position.copy(hit.point).addScaledVector(n, 0.012);
+  d.lookAt(_v.copy(hit.point).add(n)); d.rotation.z = Math.random() * 6.28; d.scale.setScalar(size * 4);
+  scene.add(d); holes.push(d);
+  if (holes.length > 160) scene.remove(holes.shift());
+  // remember which block / prop it sits on, so it goes away when that breaks
+  if (ud.wall) { const k = hit.object === ud.wall.meshes[1] ? 1 : 0, c = ud.wall.inst[k][hit.instanceId]; if (c !== undefined) { if (!ud.wall.decals.has(c)) ud.wall.decals.set(c, []); ud.wall.decals.get(c).push(d); } }
+  if (ud.prop !== undefined) (props[ud.prop].decals ||= []).push(d);
+  const power = (PEN[w] || 20) / 30, out = n.clone().multiplyScalar(0.7).addScaledVector(dir, -0.3).normalize();
+  if (mat === 'metal') { CHIPS.spark.spawn(hit.point, out, 6 + power * 6, 4, 2.5, 0.4); }
+  else if (mat === 'wood' || mat === 'cardboard') { CHIPS[mat === 'wood' ? 'wood' : 'paper'].spawn(hit.point, out, 4 + power * 6, 3, 1.5); dustPuff(hit.point); }
+  else { CHIPS[mat === 'sand' ? 'sand' : 'stone'].spawn(hit.point, out, 5 + power * 8, 3.5, 1.8); dustPuff(hit.point); }
+  const dist = hit.point.distanceTo(camera.position);
+  if (dist < 25) playImpact(mat, 0.5 / (1 + dist * 0.25));
+}
+function playImpact(mat, vol) {
+  if (MUTED || vol < 0.02) return;
+  if (mat === 'metal') return playClink(vol * 1.6, 0);
+  const a = audio(), s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  s.buffer = noiseBuf; f.type = 'bandpass';
+  f.frequency.value = mat === 'wood' ? 900 : mat === 'cardboard' ? 600 : mat === 'sand' ? 400 : 2200; f.Q.value = 0.9;
+  g.gain.setValueAtTime(vol, a.currentTime); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + (mat === 'wood' ? 0.09 : 0.05));
+  s.connect(f).connect(g).connect(a.destination); s.start(); s.stop(a.currentTime + 0.12);
+}
+
+// ---- flying and falling pieces with simple physics: gravity, bounce, friction, coming to rest
+const debris = [];
+const ROCK_COLOR = { wall: 0xcbb894, blue: 0x7f9bb8, outer: 0xc4a678, low: 0xd8c49a, trim: 0x9a9690 };
+const rockMats = {};
+const rockMat = type => rockMats[type] ||= new THREE.MeshStandardMaterial({ color: ROCK_COLOR[type] || 0xbbbbbb, roughness: 0.95, flatShading: true });
+function addDebris(mesh, vel, spin, opts = {}) {
+  mesh.castShadow = true;
+  scene.add(mesh);
+  debris.push({ mesh, vel, spin, life: opts.life || 12, r: opts.r || 0.1, flutter: !!opts.flutter });
+  while (debris.length > 280) { const o = debris.shift(); scene.remove(o.mesh); }
+}
+function updateDebris(dt) {
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const p = debris[i], m = p.mesh;
+    p.life -= dt;
+    if (p.flutter) { p.vel.y -= 3 * dt; p.vel.multiplyScalar(1 - 1.5 * dt); } else p.vel.y -= 14 * dt;
+    m.position.addScaledVector(p.vel, dt);
+    m.rotation.x += p.spin.x * dt; m.rotation.y += p.spin.y * dt; m.rotation.z += p.spin.z * dt;
+    if (m.position.y < p.r) {
+      m.position.y = p.r;
+      if (p.vel.y < -2 && p.r > 0.12 && Math.random() < 0.5) { dustPuff(m.position); }
+      p.vel.y = Math.abs(p.vel.y) * 0.25; p.vel.x *= 0.55; p.vel.z *= 0.55; p.spin.multiplyScalar(0.5);
+    }
+    for (const b of colliders) if (b.containsPoint(m.position)) {
+      // landed on top of something, or hit its side
+      if (m.position.y > b.max.y - 0.25 && p.vel.y < 0) { m.position.y = b.max.y + p.r * 0.5; p.vel.y = Math.abs(p.vel.y) * 0.2; p.vel.x *= 0.6; p.vel.z *= 0.6; p.spin.multiplyScalar(0.6); }
+      else { p.vel.x *= -0.4; p.vel.z *= -0.4; m.position.addScaledVector(p.vel, dt * 2); }
+      break;
+    }
+    if (p.life < 1.5) m.position.y -= dt * 0.15; // rubble slowly settles into the sand before it disappears
+    if (p.life <= 0) { scene.remove(m); debris.splice(i, 1); }
+  }
+}
+// whole props on the move: a crate dropping off a broken stack, a barrel thrown by a blast rolling to rest on its side
+const movers = [];
+function updateMovers(dt) {
+  for (let i = movers.length - 1; i >= 0; i--) {
+    const p = movers[i], m = p.mesh;
+    p.vel.y -= 14 * dt;
+    m.position.addScaledVector(p.vel, dt);
+    if (p.dropTo !== undefined) {
+      if (m.position.y <= p.dropTo) { m.position.y = p.dropTo; dustPuff(m.position.clone().setY(p.dropTo + 0.1)); playRubble(0.25, m.position.distanceTo(camera.position)); movers.splice(i, 1); }
+      continue;
+    }
+    m.rotation.x += p.spin.x * dt; m.rotation.y += p.spin.y * dt; m.rotation.z += p.spin.z * dt;
+    if (m.position.y < 0.3) {
+      m.position.y = 0.3;
+      if (Math.abs(p.vel.y) > 2) playClink(0.4, m.position.distanceTo(camera.position));
+      p.vel.y = Math.abs(p.vel.y) * 0.3; p.vel.x *= 0.7; p.vel.z *= 0.7; p.spin.multiplyScalar(0.6);
+      // settle lying on its side
+      m.rotation.x += (Math.PI / 2 - m.rotation.x) * Math.min(1, dt * 4); m.rotation.z *= 1 - Math.min(1, dt * 4);
+    }
+    for (const b of colliders) if (b.containsPoint(m.position)) { p.vel.x *= -0.5; p.vel.z *= -0.5; m.position.addScaledVector(p.vel, dt * 2); break; }
+    if (p.vel.lengthSq() < 0.05 && m.position.y <= 0.31) movers.splice(i, 1);
+  }
+}
+// wall blocks: those hit by the blast shatter into chunks and fly; blocks that lost support fall down whole
+function wallBreakFX(wall, rm, fall, at) {
+  const fromAt = at ? new THREE.Vector3(...at) : null;
+  for (const c of rm) {
+    const ctr = wall.cellCenter(c), type = wall.row(c) === wall.m ? 'trim' : wall.type;
+    const away = fromAt ? ctr.clone().sub(fromAt).normalize() : new THREE.Vector3((Math.random() - .5), 0.2, (Math.random() - .5)).normalize();
+    const pieces = fromAt ? 2 : 3;
+    for (let i = 0; i < pieces; i++) {
+      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.08 + Math.random() * (fromAt ? 0.12 : 0.07)), rockMat(type));
+      m.position.copy(ctr).add(new THREE.Vector3((Math.random() - .5) * 0.3, (Math.random() - .5) * 0.3, (Math.random() - .5) * 0.3));
+      const speed = fromAt ? 6 + Math.random() * 9 : 1 + Math.random() * 2;
+      addDebris(m, away.clone().multiplyScalar(speed).add(new THREE.Vector3((Math.random() - .5) * 3, Math.random() * 3, (Math.random() - .5) * 3)),
+        new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10), { r: 0.1 });
+    }
+    CHIPS.stone.spawn(ctr, away, 8, fromAt ? 8 : 2, 3);
+  }
+  for (const c of fall) {
+    const b = wall.cellBox(c), s = b.getSize(new THREE.Vector3());
+    const m = new THREE.Mesh(new THREE.BoxGeometry(s.x * 0.95, s.y * 0.95, s.z * 0.95), rockMat(wall.row(c) === wall.m ? 'trim' : wall.type));
+    m.position.copy(b.getCenter(new THREE.Vector3()));
+    addDebris(m, new THREE.Vector3((Math.random() - .5) * 1.5, -0.5, (Math.random() - .5) * 1.5), new THREE.Vector3((Math.random() - .5) * 2, 0, (Math.random() - .5) * 2), { r: Math.min(s.x, s.y, s.z) * 0.45 });
+  }
+  // thick dust cloud where it broke
+  const all = [...rm, ...fall];
+  if (all.length) {
+    const ctr = all.reduce((v, c) => v.add(wall.cellCenter(c)), new THREE.Vector3()).multiplyScalar(1 / all.length);
+    const n = Math.min(14, 2 + all.length);
+    const parts = [];
+    for (let i = 0; i < n; i++) parts.push(puff(SMOKE_TEX, ctr.clone().add(new THREE.Vector3((Math.random() - .5) * 2, (Math.random() - .5) * 2, (Math.random() - .5) * 2)),
+      new THREE.Vector3((Math.random() - .5) * 2, 0.4 + Math.random(), (Math.random() - .5) * 2), { size: 1 + Math.random() * 1.5, grow: 1.5, life: 2.5 + Math.random() * 2, drag: 1, fade: 0.6, tint: 0xd2bd98 }));
+    booms.push(parts);
+    const d = ctr.distanceTo(camera.position);
+    if (!fromAt && d < 40) playRubble(0.5 / (1 + d * 0.1), d);
+  }
+}
+function playRubble(vol, dist) {
+  if (MUTED || !SND.debris) return;
+  const a = audio(), s = a.createBufferSource(), g = a.createGain(), f = a.createBiquadFilter();
+  s.buffer = SND.debris; s.playbackRate.value = 0.7 + Math.random() * 0.2; f.type = 'lowpass'; f.frequency.value = 6000 / (1 + dist * 0.05);
+  g.gain.value = vol; s.connect(f).connect(g).connect(a.destination); s.start();
+  const o = a.createOscillator(), og = a.createGain(); // the heavy thud of falling masonry
+  o.frequency.setValueAtTime(90, a.currentTime); o.frequency.exponentialRampToValueAtTime(40, a.currentTime + 0.4);
+  og.gain.setValueAtTime(vol * 0.8, a.currentTime); og.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.5);
+  o.connect(og).connect(a.destination); o.start(); o.stop(a.currentTime + 0.55);
+}
+// props: crates burst into planks, cardboard shreds, barrels get thrown and dented, fuel cans burst into flame
+function propFX(p, m) {
+  for (const d of p.decals || []) { scene.remove(d); const i = holes.indexOf(d); if (i >= 0) holes.splice(i, 1); }
+  p.decals = [];
+  if (p.solid) { const i = colliders.indexOf(p.box); if (i >= 0) colliders.splice(i, 1); }
+  p.obj.traverse(c => { const i = worldMeshes.indexOf(c); if (i >= 0) worldMeshes.splice(i, 1); });
+  const ctr = p.box.getCenter(new THREE.Vector3()), size = p.box.getSize(new THREE.Vector3());
+  const at = m.at ? new THREE.Vector3(...m.at) : ctr.clone().add(new THREE.Vector3(0, -0.5, 0));
+  const away = ctr.clone().sub(at).setY(0).normalize(); away.y = 0.6; away.normalize();
+  const blast = m.how === 'blast';
+  const R = () => (Math.random() - .5);
+  let woodMat = null; p.obj.traverse(c => { if (c.isMesh && !woodMat) woodMat = c.material; });
+  if (m.act === 'break' && (p.kind === 'crate' || p.kind === 'door')) {
+    scene.remove(p.obj);
+    const n = p.kind === 'door' ? 7 : 12;
+    for (let i = 0; i < n; i++) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(0.35 + Math.random() * Math.max(size.x, size.z) * 0.5, 0.09 + Math.random() * 0.06, 0.03), p.kind === 'door' ? MAT.blue : woodMat);
+      plank.position.copy(ctr).add(new THREE.Vector3(R() * size.x, R() * size.y, R() * size.z));
+      addDebris(plank, away.clone().multiplyScalar(blast ? 6 + Math.random() * 8 : 1.5 + Math.random() * 2).add(new THREE.Vector3(R() * 3, Math.random() * 3, R() * 3)),
+        new THREE.Vector3(R() * 14, R() * 14, R() * 14), { r: 0.05 });
+    }
+    CHIPS.wood.spawn(ctr, away, 40, blast ? 8 : 3, 3);
+    dustPuff(ctr); playWoodBreak(ctr);
+  } else if (m.act === 'break' && p.kind === 'cardboard') {
+    scene.remove(p.obj);
+    for (let i = 0; i < 8; i++) {
+      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(0.2 + Math.random() * 0.2, 0.15 + Math.random() * 0.2), woodMat);
+      sheet.material.side = THREE.DoubleSide;
+      sheet.position.copy(ctr).add(new THREE.Vector3(R() * 0.4, R() * 0.4, R() * 0.4));
+      addDebris(sheet, away.clone().multiplyScalar(blast ? 7 : 2).add(new THREE.Vector3(R() * 3, 2 + Math.random() * 3, R() * 3)), new THREE.Vector3(R() * 8, R() * 8, R() * 8), { r: 0.02, flutter: true });
+    }
+    CHIPS.paper.spawn(ctr, away, 30, blast ? 6 : 2, 2.5, 2);
+  } else if (m.act === 'knock') {
+    // the barrel is thrown, tumbles and ends up lying on its side, dented
+    p.obj.scale.x *= 0.88; p.obj.scale.z *= 1.06;
+    movers.push({ mesh: p.obj, vel: away.clone().multiplyScalar(5 + Math.random() * 4).add(new THREE.Vector3(0, 4, 0)), spin: new THREE.Vector3(R() * 8, R() * 4, R() * 8), barrel: true });
+    CHIPS.spark.spawn(ctr, away, 20, 6, 3, 0.5);
+  } else if (m.act === 'boom') {
+    scene.remove(p.obj);
+    const red = new THREE.MeshStandardMaterial({ color: 0x8a1a12, roughness: 0.5, metalness: 0.7 });
+    for (let i = 0; i < 6; i++) {
+      const piece = new THREE.Mesh(new THREE.BoxGeometry(0.1 + Math.random() * 0.15, 0.08 + Math.random() * 0.1, 0.02), red);
+      piece.position.copy(ctr);
+      addDebris(piece, new THREE.Vector3(R() * 10, 5 + Math.random() * 8, R() * 10), new THREE.Vector3(R() * 15, R() * 15, R() * 15), { r: 0.03 });
+    }
+  } else if (m.act === 'drop') {
+    // what was standing on a broken crate falls down onto whatever is below
+    p.box.translate(new THREE.Vector3(0, -m.dy, 0));
+    movers.push({ mesh: p.obj, vel: new THREE.Vector3(0, 0, 0), dropTo: p.obj.position.y - m.dy });
+    if (p.solid && !colliders.includes(p.box)) colliders.push(p.box);
+    p.obj.traverse(c => { if (c.isMesh && !worldMeshes.includes(c)) worldMeshes.push(c); });
+  }
+}
+function playWoodBreak(at) {
+  if (MUTED) return;
+  const d = at.distanceTo(camera.position); if (d > 40) return;
+  const a = audio(), t = a.currentTime;
+  for (let i = 0; i < 6; i++) {
+    const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    s.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = 500 + Math.random() * 900; f.Q.value = 1.5;
+    const t0 = t + i * 0.035 * Math.random() * 2;
+    g.gain.setValueAtTime(0.5 / (1 + d * 0.1), t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+    s.connect(f).connect(g).connect(a.destination); s.start(t0); s.stop(t0 + 0.15);
+  }
+}
+// burning fuel: flames and smoke for a few seconds, a flickering light, a crackling roar
+const fires = [];
+function startFire(at, secs) {
+  const light = new THREE.PointLight(0xff7a20, 25, 12, 1.8); light.position.copy(at).add(new THREE.Vector3(0, 0.8, 0)); scene.add(light);
+  fires.push({ at: at.clone(), t: secs, light, emit: 0, sound: playFireSound(at, secs) });
+}
+function updateFires(dt) {
+  for (let i = fires.length - 1; i >= 0; i--) {
+    const f = fires[i];
+    f.t -= dt; f.emit -= dt;
+    const k = Math.min(1, f.t / 1.5); // dies down at the end
+    f.light.intensity = (18 + Math.random() * 14) * k;
+    if (f.emit <= 0 && f.t > 0) {
+      f.emit = 0.04;
+      const parts = [puff(FIRE_TEX, f.at.clone().add(new THREE.Vector3((Math.random() - .5) * 0.8, 0.1, (Math.random() - .5) * 0.8)), new THREE.Vector3((Math.random() - .5) * 0.4, 1.5 + Math.random() * 1.5, (Math.random() - .5) * 0.4),
+        { size: (0.5 + Math.random() * 0.5) * (0.4 + 0.6 * k), grow: 0.6, life: 0.5 + Math.random() * 0.4, hdr: 1.8, cool: true })];
+      if (Math.random() < 0.3) parts.push(puff(SMOKE_TEX, f.at.clone().add(new THREE.Vector3(0, 1.2, 0)), new THREE.Vector3((Math.random() - .5) * 0.5, 1.4, (Math.random() - .5) * 0.5),
+        { size: 0.8, grow: 2.5, life: 2.5, drag: 0.3, fade: 0.5 }));
+      booms.push(parts);
+    }
+    if (f.t <= 0) { scene.remove(f.light); fires.splice(i, 1); }
+  }
+}
+function playFireSound(at, secs) {
+  if (MUTED) return;
+  const d = at.distanceTo(camera.position); if (d > 35) return;
+  const a = audio(), t = a.currentTime;
+  const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  s.buffer = noiseBuf; s.loop = true; f.type = 'lowpass'; f.frequency.value = 700;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25 / (1 + d * 0.12), t + 0.3); g.gain.setValueAtTime(0.25 / (1 + d * 0.12), t + secs - 1); g.gain.exponentialRampToValueAtTime(0.0001, t + secs);
+  s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t + secs + 0.1);
+  for (let i = 0; i < secs * 6; i++) { // crackles
+    const c = a.createBufferSource(), cf = a.createBiquadFilter(), cg = a.createGain(), t0 = t + Math.random() * secs;
+    c.buffer = noiseBuf; cf.type = 'highpass'; cf.frequency.value = 2500;
+    cg.gain.setValueAtTime(0.12 / (1 + d * 0.15), t0); cg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.03);
+    c.connect(cf).connect(cg).connect(a.destination); c.start(t0); c.stop(t0 + 0.04);
+  }
+}
+
+// ---- HOST: decides what breaks and tells everyone (so every computer sees the same holes and ruins)
+const worldRay = new THREE.Raycaster();
+function hostShotWorld(o, e, w) {
+  const O = new THREE.Vector3(...o), E = new THREE.Vector3(...e), dir = E.clone().sub(O), len = dir.length();
+  if (len < 0.01) return;
+  dir.normalize();
+  worldRay.set(O, dir); worldRay.far = len + 0.05;
+  const hit = worldRay.intersectObjects(worldMeshes, false)[0];
+  if (!hit) return;
+  const ud = hit.object.userData || {}, pen = PEN[w] || 0;
+  if (ud.wall) {
+    const wall = ud.wall, k = hit.object === wall.meshes[1] ? 1 : 0, c = wall.inst[k][hit.instanceId];
+    if (c === undefined) return;
+    wall.hp[c] -= pen;
+    if (wall.hp[c] <= 0) hostBreakWall(wall, [c], null, []);
+  } else if (ud.prop !== undefined) {
+    const p = props[ud.prop];
+    if (!p.alive || p.hp === Infinity) return;
+    p.hp -= pen * (p.kind === 'cardboard' ? 2 : 1);
+    if (p.hp <= 0) hostBreakProp(p, null, 'shot', null);
+  }
+}
+function hostBreakWall(wall, cells, at, cracks) {
+  const rm = wall.kill(cells);
+  const fall = wall.kill(wall.unsupported());
+  if (rm.length || fall.length || cracks.length) hostBroadcast({ t:'brk', wid: wall.id, rm, fall, cr: cracks, at });
+}
+function hostBreakProp(p, at, how, from) {
+  if (!p.alive) return;
+  p.alive = false;
+  const act = p.kind === 'barrel' ? 'knock' : p.kind === 'jerrycan' ? 'boom' : 'break';
+  // anything resting on it falls down onto what is underneath
+  const drops = [];
+  for (const q of props) {
+    if (!q.alive || q === p || !q.solid) continue;
+    if (Math.abs(q.box.min.y - p.box.max.y) > 0.2 || q.box.min.y < 0.3) continue;
+    if (q.box.max.x < p.box.min.x || q.box.min.x > p.box.max.x || q.box.max.z < p.box.min.z || q.box.min.z > p.box.max.z) continue;
+    let floor = 0;
+    for (const r of props) if (r.alive && r !== q && r !== p && r.solid && r.box.max.y <= q.box.min.y + 0.05 &&
+      !(r.box.max.x < q.box.min.x || r.box.min.x > q.box.max.x || r.box.max.z < q.box.min.z || r.box.min.z > q.box.max.z)) floor = Math.max(floor, r.box.max.y);
+    drops.push([q.id, q.box.min.y - floor]);
+  }
+  hostBroadcast({ t:'prop', id: p.id, act, at, how });
+  for (const [id, dy] of drops) hostBroadcast({ t:'prop', id, act:'drop', dy });
+  if (act === 'boom') {
+    // a fuel can goes up in a fireball and keeps burning — and can set off more cans nearby
+    const c = p.box.getCenter(new THREE.Vector3());
+    setTimeout(() => {
+      hostBlast(c, from, { power: 0.5, radius: 6, w: 'jerrycan' });
+      hostFire(c, from, 6);
+    }, 120 + Math.random() * 150);
+  }
+}
+// the blast: hurts players, tears holes in walls, cracks the blocks around, smashes props
+function hostBlast(at, from, { power = 1, radius = NADE.radius, w = 'grenade', nid = null } = {}) {
+  const pw = power * cfg.nadePower / 100;
+  hostBroadcast({ t:'boom', nid, p: [at.x, at.y, at.z], s: power });
+  for (const v of [...H.players.values()]) {
+    if (!v.alive) continue;
+    const body = new THREE.Vector3(v.p[0], v.p[1] + 1.0, v.p[2]), head = body.clone(); head.y += 0.65;
+    const d = body.distanceTo(at);
+    if (d > radius) continue;
+    // a wall between you and the blast protects you; half-cover protects partly
+    const seen = (lineOfSight(at, body) ? 0.75 : 0) + (lineOfSight(at, head) ? 0.25 : 0);
+    if (!seen) continue;
+    const dmg = NADE.maxDmg * pw * (1 - d / radius) * seen;
+    if (dmg < 1) continue;
+    const dir = body.clone().sub(at).normalize();
+    hostDamage(from, v.id, dmg, 'blast', w, [body.x, body.y, body.z], [dir.x, dir.y, dir.z], [at.x, at.y, at.z]);
+  }
+  const scale = Math.cbrt(pw);
+  for (const wall of walls) {
+    const rb = BLAST_HOLE[wall.type] * scale;
+    const whole = wall.meshes[0].boundingBox ? wall.cellBox(0).union(wall.cellBox(wall.alive.length - 1)) : null;
+    if (whole && whole.distanceToPoint(at) > rb * 1.8) continue;
+    const rm = [], cracks = [];
+    for (let c = 0; c < wall.alive.length; c++) {
+      if (!wall.alive[c]) continue;
+      const d = wall.cellCenter(c).distanceTo(at) - CELL * 0.35;
+      const edge = rb * (0.75 + Math.random() * 0.5); // ragged hole, not a perfect circle
+      if (d < edge) rm.push(c);
+      else if (d < rb * 1.8) {
+        const amt = +(0.35 * (1 - (d - rb) / (rb * 0.8))).toFixed(2);
+        wall.hp[c] *= 0.5;
+        if (amt > 0.05) cracks.push([c, amt]);
+      }
+    }
+    if (rm.length || cracks.length) hostBreakWall(wall, rm, [at.x, at.y, at.z], cracks);
+  }
+  for (const p of props) {
+    if (!p.alive) continue;
+    const d = p.box.distanceToPoint(at);
+    const reach = { crate: 2.6, door: 2.8, cardboard: 4.5, barrel: 3.5, jerrycan: 4.5 }[p.kind] * scale;
+    if (d < reach) hostBreakProp(p, [at.x, at.y, at.z], 'blast', from);
+    else if (d < radius && p.hp !== Infinity) { p.hp -= 200 * pw * (1 - d / radius); if (p.hp <= 0) hostBreakProp(p, [at.x, at.y, at.z], 'blast', from); }
+  }
+}
+// new match: walls rebuilt, props back in place, rubble cleared
+function resetWorld() {
+  for (const w of walls) {
+    for (const im of w.meshes) if (im) { scene.remove(im); const i = worldMeshes.indexOf(im); if (i >= 0) worldMeshes.splice(i, 1); }
+    for (const b of w.boxes) { const i = colliders.indexOf(b); if (i >= 0) colliders.splice(i, 1); }
+    for (const list of w.decals.values()) for (const d of list) scene.remove(d);
+  }
+  walls.splice(0, walls.length, ...WALLS.map((def, i) => new Wall(i, def)));
+  for (const p of props) {
+    if (!p.obj.parent) scene.add(p.obj);
+    p.obj.position.copy(p.pos0); p.obj.rotation.copy(p.rot0); p.obj.scale.copy(p.scale0);
+    p.obj.updateMatrixWorld(true);
+    p.box.setFromObject(p.obj);
+    if (p.solid && !colliders.includes(p.box)) colliders.push(p.box);
+    p.obj.traverse(c => { if (c.isMesh && !worldMeshes.includes(c)) worldMeshes.push(c); });
+    p.alive = true; p.hp = PROP_HP[p.kind];
+    for (const d of p.decals || []) scene.remove(d); p.decals = [];
+  }
+  for (const o of [...debris, ...movers]) if (!props.some(p => p.obj === o.mesh)) scene.remove(o.mesh);
+  debris.length = 0; movers.length = 0;
+  for (const h of holes) scene.remove(h); holes.length = 0;
+}
+// what is already broken, for a player who joins in the middle of a game
+function worldState() {
+  const r = v => +v.toFixed(3);
+  return { t:'world',
+    walls: walls.map(w => [...w.alive.keys()].filter(c => !w.alive[c])),
+    props: props.filter(p => !p.alive || p.obj.position.y !== p.y0).map(p => [p.id, p.alive ? 1 : 0, p.obj.parent ? 1 : 0,
+      [r(p.obj.position.x), r(p.obj.position.y), r(p.obj.position.z)], [r(p.obj.rotation.x), r(p.obj.rotation.y), r(p.obj.rotation.z)]]) };
+}
+function applyWorldState(m) {
+  m.walls.forEach((dead, i) => { if (dead.length) walls[i].kill(dead); });
+  for (const [id, alive, shown, pos, rot] of m.props) {
+    const p = props[id];
+    if (!alive) {
+      p.alive = false;
+      if (p.solid) { const i = colliders.indexOf(p.box); if (i >= 0) colliders.splice(i, 1); }
+      p.obj.traverse(c => { const i = worldMeshes.indexOf(c); if (i >= 0) worldMeshes.splice(i, 1); });
+      if (!shown) { scene.remove(p.obj); continue; }
+    }
+    const dy = pos[1] - p.obj.position.y;
+    p.obj.position.set(...pos); p.obj.rotation.set(...rot);
+    if (alive && dy) p.box.translate(new THREE.Vector3(0, dy, 0));
+  }
+}
+const hostFires = [];
+function hostFire(at, from, secs) {
+  hostBroadcast({ t:'fire', p: [at.x, at.y, at.z], s: secs });
+  hostFires.push({ at: at.clone(), from, t: secs, tick: 0 });
+}
+function hostFireTick(dt) {
+  for (let i = hostFires.length - 1; i >= 0; i--) {
+    const f = hostFires[i];
+    f.t -= dt; f.tick -= dt;
+    if (f.tick <= 0) {
+      f.tick = 0.5;
+      for (const v of [...H.players.values()]) {
+        if (!v.alive) continue;
+        if (Math.hypot(v.p[0] - f.at.x, v.p[2] - f.at.z) < 1.6 && v.p[1] < 1.5) // standing in the flames burns
+          hostDamage(f.from, v.id, 6, 'body', 'fire', [v.p[0], v.p[1] + 1, v.p[2]], [0, 1, 0], [f.at.x, f.at.y, f.at.z]);
+      }
+    }
+    if (f.t <= 0) hostFires.splice(i, 1);
+  }
+}
+
 let actx, noiseBuf;
 function audio() {
   if (!actx) {
@@ -1161,7 +1828,8 @@ const FOLEY = { // [start s, length s, brightness 0..1, loudness]
   reload_pistol: [[0.1, 0.04, 0.8, 0.6], [0.75, 0.05, 0.85, 0.7], [1.2, 0.05, 0.95, 0.85]],
   pump:          [[0, 0.08, 0.45, 0.8], [0.2, 0.07, 0.6, 0.9]],
   bolt:          [[0, 0.05, 0.9, 0.7], [0.14, 0.07, 0.55, 0.6], [0.36, 0.06, 0.6, 0.6], [0.5, 0.05, 0.95, 0.8]],
-  throw:         [[0, 0.025, 0.95, 0.5], [0.06, 0.02, 0.9, 0.35], [0.2, 0.28, 0.12, 0.45]], // pin, lever, whoosh
+  pin:           [[0, 0.025, 0.95, 0.5], [0.07, 0.02, 0.85, 0.3]],     // pulling the pin
+  throw:         [[0, 0.02, 0.9, 0.35], [0.03, 0.28, 0.12, 0.45]],     // lever flies off, whoosh
   debris: Array.from({ length: 34 }, (_, i) => [Math.pow(i / 34, 1.6) * 1.6, 0.02 + Math.random() * 0.04, 0.4 + Math.random() * 0.5, 0.5 * (1 - i / 40)]),
   // footsteps: a soft crunch of sand, not a thump (a low thump sounded like distant gunfire)
   step1: [[0, 0.05, 0.35, 0.22], [0.025, 0.04, 0.5, 0.12]], step2: [[0, 0.045, 0.3, 0.2], [0.02, 0.05, 0.45, 0.12]],
@@ -1342,6 +2010,7 @@ function hostHandle(from, m) {
       money: cfg.startMoney, armor: 0, helmet: false, nades: 0 };
     H.players.set(from, p);
     hostSend(from, { t:'cfg', cfg });
+    if (from !== myId) hostSend(from, worldState()); // someone joining later sees the ruins that are already there
     hostSpawn(p);
     hostBroadcast({ t:'info', text: p.name + ' зашёл за команду «' + TEAM_NAME[p.team] + '»' });
     adminRefresh();
@@ -1349,7 +2018,11 @@ function hostHandle(from, m) {
   }
   const p = H.players.get(from); if (!p) return;
   if (m.t === 'st') { if (p.alive) { p.p = m.p; p.ry = m.ry; p.rx = m.rx; p.w = m.w; } }
-  else if (m.t === 'shot') { if (p.alive) hostBroadcast({ t:'shot', id: from, o: m.o, e: m.e, es: m.es, w: m.w }, from); }
+  else if (m.t === 'shot') {
+    if (!p.alive) return;
+    hostBroadcast({ t:'shot', id: from, o: m.o, e: m.e, es: m.es, w: m.w }, from);
+    for (const e of m.es || [m.e]) hostShotWorld(m.o, e, m.w); // bullets wear down walls and props
+  }
   else if (m.t === 'hit') {
     const w = WEAPONS[m.w]; if (!w || !p.alive) return;
     const part = LIMB_FACTOR[m.part] ? m.part : 'body';
@@ -1433,30 +2106,14 @@ function hostThrow(from, o, v) {
   hostNades.push({ nid, from, pos: new THREE.Vector3(...o), vel: new THREE.Vector3(...v), t: 0, acc: 0 });
   hostBroadcast({ t:'nade', nid, id: from, o, v });
 }
-function hostExplode(n) {
-  const at = n.pos, power = cfg.nadePower / 100;
-  hostBroadcast({ t:'boom', nid: n.nid, p: [at.x, at.y, at.z] });
-  for (const v of [...H.players.values()]) {
-    if (!v.alive) continue;
-    const body = new THREE.Vector3(v.p[0], v.p[1] + 1.0, v.p[2]), head = body.clone(); head.y += 0.65;
-    const d = body.distanceTo(at);
-    if (d > NADE.radius) continue;
-    // a wall between you and the blast protects you; half-cover protects partly
-    const seen = (lineOfSight(at, body) ? 0.75 : 0) + (lineOfSight(at, head) ? 0.25 : 0);
-    if (!seen) continue;
-    const dmg = NADE.maxDmg * power * (1 - d / NADE.radius) * seen;
-    if (dmg < 1) continue;
-    const dir = body.clone().sub(at).normalize();
-    hostDamage(n.from, v.id, dmg, 'blast', 'grenade', [body.x, body.y, body.z], [dir.x, dir.y, dir.z], [at.x, at.y, at.z]);
-  }
-}
 function hostTick(dt) {
   for (const b of H.bots) botThink(b, dt);
   for (let i = hostNades.length - 1; i >= 0; i--) {
     const n = hostNades[i];
     stepNade(n, dt);
-    if (n.t >= NADE.fuse) { hostNades.splice(i, 1); hostExplode(n); }
+    if (n.t >= NADE.fuse) { hostNades.splice(i, 1); hostBlast(n.pos, n.from, { nid: n.nid }); }
   }
+  hostFireTick(dt);
   H.snapTimer -= dt;
   if (H.snapTimer <= 0) {
     H.snapTimer = 0.05;
@@ -1558,7 +2215,8 @@ const NAV = [];
 function buildNav() {
   for (let x = -36; x <= 36; x += 4) for (let z = -36; z <= 36; z += 4) {
     const p = new THREE.Vector3(x, 0, z);
-    if (!colliders.some(b => b.min.y < 1 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
+    const insideHouse = Math.abs(x) < 3.5 && Math.abs(z) < 3.5; // closed yard: reachable only through a blown hole
+    if (!insideHouse && !colliders.some(b => b.min.y < 1 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
   }
 }
 let botSeq = 0;
@@ -1602,7 +2260,8 @@ function botThink(b, dt) {
       const acc = THREE.MathUtils.clamp(0.55 - best * 0.012, 0.15, 0.5) * [0.6, 1, 1.4][lvl];
       const hit = Math.random() < acc;
       const end = hit ? target : target.clone().add(new THREE.Vector3((Math.random()-.5)*2, (Math.random()-.5)*1.5, (Math.random()-.5)*2));
-      hostBroadcast({ t:'shot', id: b.id, o: [eye.x, eye.y - .2, eye.z], e: [end.x, end.y, end.z], w: b.w });
+      hostBroadcast({ t:'shot', id: b.id, o: [eye.x, eye.y, eye.z], e: [end.x, end.y, end.z], w: b.w });
+      hostShotWorld([eye.x, eye.y, eye.z], [end.x, end.y, end.z], b.w);
       if (hit) {
         const roll = Math.random();
         const part = roll < [0.05, 0.08, 0.14][lvl] ? 'head' : roll < 0.6 ? 'body' : ['larm','rarm','lleg','rleg'][Math.floor(Math.random() * 4)];
@@ -1683,7 +2342,7 @@ function clientHandle(m) {
       break;
     }
     case 'buyno': showCenter(`<small>${esc(m.why)}</small>`, 1.5); playSample('empty', 0.5); break;
-    case 'reset': resetLoadout(); break;
+    case 'reset': resetLoadout(); resetWorld(); break;
     case 'team': myTeam = m.team; resetLoadout(); break;
     case 'kicked': showCenter('Создатель игры убрал тебя из игры.', 9999); started = false; document.exitPointerLock(); peer?.destroy(); break;
     case 'bl': bloodHit(m); break;
@@ -1691,9 +2350,24 @@ function clientHandle(m) {
     case 'boom': {
       const n = clientNades.get(m.nid);
       if (n) { scene.remove(n.obj); clientNades.delete(m.nid); }
-      explosion(new THREE.Vector3(...m.p));
+      explosion(new THREE.Vector3(...m.p), m.s || 1);
       break;
     }
+    case 'brk': {
+      const wall = walls[m.wid]; if (!wall) break;
+      for (const [c, amt] of m.cr || []) wall.crack(c, amt);
+      wall.kill(m.rm); wall.kill(m.fall);
+      wallBreakFX(wall, m.rm, m.fall, m.at);
+      break;
+    }
+    case 'prop': {
+      const p = props[m.id]; if (!p) break;
+      if (m.act !== 'drop') p.alive = false;
+      propFX(p, m);
+      break;
+    }
+    case 'fire': startFire(new THREE.Vector3(...m.p), m.s); break;
+    case 'world': applyWorldState(m); break;
     case 'dmg':
       me.hp = m.hp; me.armor = m.armor; me.helmet = m.helmet;
       $('#dmg').style.opacity = 1; setTimeout(() => $('#dmg').style.opacity = 0, 150);
@@ -1702,8 +2376,18 @@ function clientHandle(m) {
     case 'shot': {
       const o = new THREE.Vector3(...m.o);
       if (m.w !== 'knife') {
-        worldFlash(o);
-        for (const p of m.es || [m.e]) { const e = new THREE.Vector3(...p); tracer(o, e); dustPuff(e); }
+        const muzzle = o.clone(); muzzle.y -= 0.15;
+        worldFlash(muzzle);
+        for (const p of m.es || [m.e]) {
+          const e = new THREE.Vector3(...p), dir = e.clone().sub(o), len = dir.length();
+          tracer(muzzle, e);
+          // find what the bullet hit, to leave the right kind of hole there
+          if (len > 0.01) {
+            dir.normalize(); worldRay.set(o, dir); worldRay.far = len + 0.05;
+            const hit = worldRay.intersectObjects(worldMeshes, false)[0];
+            if (hit) impactAt(hit, m.w, dir);
+          }
+        }
       }
       const dist = o.distanceTo(me.pos);
       // behind walls a shot is quieter and duller
@@ -1713,7 +2397,7 @@ function clientHandle(m) {
       break;
     }
     case 'kill': {
-      const icon = WEAPONS[m.w] ? WEAPONS[m.w].name : '▸';
+      const icon = WEAPONS[m.w] ? WEAPONS[m.w].name : { fire:'Огонь', jerrycan:'Взрыв канистры' }[m.w] || '▸';
       addFeed(`<span class="n-${m.kt}">${esc(m.kn)}</span> ${icon}${m.head ? ' ✸' : ''} <span class="n-${m.vt}">${esc(m.vn)}</span>`, m.killer === myId || m.victim === myId);
       if (m.victim === myId) {
         me.alive = false; me.firing = false; setZoom(false);
@@ -1760,7 +2444,7 @@ function lock() { audio().resume(); canvas.requestPointerLock()?.catch?.(() => {
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
   $('#pause').style.display = locked || !started || buyOpen || adminOpen ? 'none' : 'flex';
-  if (!locked) { me.firing = false; for (const k in keys) keys[k] = false; }
+  if (!locked) { me.firing = false; me.nadeHold = null; for (const k in keys) keys[k] = false; }
 });
 $('#resume').onclick = lock;
 $('#copy').onclick = () => { $('#link').select(); navigator.clipboard?.writeText($('#link').value); $('#copy').textContent = 'Скопировано!'; setTimeout(() => $('#copy').textContent = 'Копировать', 1500); };
@@ -1774,10 +2458,21 @@ addEventListener('mousedown', e => {
   if (!locked) return;
   if (e.button === 0) { me.firing = true; me.firedThisClick = false; }
   if (e.button === 2 && WEAPONS[me.weapon].zoom && !me.reloadEnd) setZoom(!me.zoom);
-  if (e.button === 2 && me.weapon === 'grenade') throwNade(true); // short underhand lob
+  // grenade, like in CS2: pressing pulls the pin and winds up, releasing throws. Left = far, right = short lob
+  if ((e.button === 0 || e.button === 2) && me.weapon === 'grenade' && me.alive && me.nades > 0 && !me.nadeHold && nadeHideT <= 0) {
+    me.nadeHold = { btn: e.button, t: now() };
+    playSample('pin', 0.6);
+  }
 });
 addEventListener('contextmenu', e => e.preventDefault());
-addEventListener('mouseup', e => { if (e.button === 0) me.firing = false; });
+addEventListener('mouseup', e => {
+  if (e.button === 0) me.firing = false;
+  if (me.nadeHold && e.button === me.nadeHold.btn) {
+    const lob = e.button === 2;
+    me.nadeHold = null;
+    if (me.weapon === 'grenade') throwNade(lob);
+  }
+});
 addEventListener('wheel', e => {
   if (!locked) return;
   let s = WEAPONS[me.weapon].slot;
@@ -1836,6 +2531,7 @@ let drawT = 0;
 function selectSlot(slot) { if (me.loadout[slot]) switchWeapon(me.loadout[slot]); }
 function switchWeapon(w) {
   if (!w || me.weapon === w) return;
+  me.nadeHold = null;
   me.weapon = w; me.reloadEnd = 0; me.lastShot = now() - 0.5; me.bloom = 0; drawT = 0.35;
   setZoom(false);
   playSample('draw', 0.5);
@@ -1861,7 +2557,7 @@ function tryFire() {
   const t = now(), w = WEAPONS[me.weapon];
   if (!me.alive || me.reloadEnd || t - me.lastShot < w.rate) return;
   if (!w.auto && me.firedThisClick) return;
-  if (me.weapon === 'grenade') { me.firedThisClick = true; me.lastShot = t; throwNade(false); return; }
+  if (me.weapon === 'grenade') return; // grenades are thrown when the button is released (see mouseup)
   if (me.ammo[me.weapon] <= 0) { if (!playSample('empty', 0.5)) beep(900, .03, .06); startReload(); me.firedThisClick = true; return; }
   me.lastShot = t; me.firedThisClick = true;
   if (me.weapon !== 'knife') me.ammo[me.weapon]--;
@@ -1889,10 +2585,7 @@ function tryFire() {
         sendToHost({ t:'hit', target: r.id, part, w: me.weapon, f, pt: r2(hit.point), dir: r2(dir) });
         hitAny = true; headAny ||= head;
       }
-    } else if (hit && hit.face) {
-      const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
-      bulletHole(hit.point, n); if (p < 3) dustPuff(hit.point);
-    }
+    } else if (hit) impactAt(hit, me.weapon, dir);
   }
   if (hitAny) {
     const hm = $('#hitmark'); hm.className = headAny ? 'head' : ''; hm.style.opacity = 1; setTimeout(() => hm.style.opacity = 0, 120);
@@ -1912,11 +2605,11 @@ function tryFire() {
   if (me.weapon === 'shotgun') setTimeout(() => playSample('pump', 0.5), 350);
   if (me.weapon === 'sniper') { setTimeout(() => playSample('bolt', 0.5), 450); setZoom(false); }
   const r2 = v => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
-  sendToHost({ t:'shot', o: r2(origin.clone().setY(origin.y - 0.15)), e: r2(ends[0]), es: ends.length > 1 ? ends.map(r2) : undefined, w: me.weapon });
+  sendToHost({ t:'shot', o: r2(origin), e: r2(ends[0]), es: ends.length > 1 ? ends.map(r2) : undefined, w: me.weapon });
 }
 
 // ================= main loop =================
-let vmKick = 0, bob = 0, sendTimer = 0;
+let vmKick = 0, bob = 0, sendTimer = 0, holdK = 0;
 function enterGame() {
   started = true;
   $('#menu').style.display = 'none';
@@ -1955,7 +2648,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, toggleAdmin, killEffect, H, hostThrow, explosion, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, toggleAdmin, killEffect, H, hostThrow, explosion, walls, props, hostBlast, colliders, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
@@ -2015,8 +2708,12 @@ function frame() {
     vmKick = Math.max(0, vmKick - dt * 0.5);
     drawT = Math.max(0, drawT - dt);
     const dip = (me.reloadEnd ? 0.12 : 0) + drawT * 0.4;
-    vm.position.set(Math.sin(bob) * 0.008, Math.abs(Math.cos(bob)) * 0.008 - dip, vmKick);
-    vm.rotation.set(me.weapon === 'knife' ? -vmKick * 2.4 : vmKick * 1.2 + (me.reloadEnd ? 0.35 : 0), 0, me.reloadEnd ? -0.3 : 0);
+    // holding a grenade: the arm pulls back and up, ready to throw (lower for the short lob)
+    holdK += ((me.nadeHold ? 1 : 0) - holdK) * Math.min(1, dt * 10);
+    const lobHold = me.nadeHold?.btn === 2 ? -1 : 1;
+    vm.position.set(Math.sin(bob) * 0.008 + holdK * 0.05, Math.abs(Math.cos(bob)) * 0.008 - dip + holdK * 0.09 * lobHold, vmKick + holdK * 0.12);
+    vm.rotation.set(me.weapon === 'knife' ? -vmKick * 2.4 : vmKick * 1.2 + (me.reloadEnd ? 0.35 : 0) - holdK * 0.5 * lobHold, 0, me.reloadEnd ? -0.3 : holdK * -0.3);
+    $('#nadehint').style.display = me.nadeHold ? 'block' : 'none';
 
     sendTimer -= dt;
     if (sendTimer <= 0 && myId) {
@@ -2092,6 +2789,10 @@ function frame() {
   updateGore(dt);
   updateNades(dt);
   updateExplosions(dt);
+  updateDebris(dt);
+  updateMovers(dt);
+  updateFires(dt);
+  for (const k in CHIPS) CHIPS[k].update(dt);
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i];
     f.t -= dt;
