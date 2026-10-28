@@ -74,8 +74,34 @@
   .buyp { background:var(--panel); backdrop-filter:blur(8px); border-top:3px solid var(--accent); padding:18px 22px; display:flex; flex-wrap:wrap; gap:18px; max-width:94vw; }
   .buyp h2 { width:100%; margin:0; font-size:26px; text-transform:uppercase; letter-spacing:1px; } .buyp h2 small { font-size:15px; color:var(--muted); letter-spacing:0; text-transform:none; margin-left:8px; }
   .buyp h3 { margin:0 0 8px; color:var(--muted); font-size:14px; text-transform:uppercase; letter-spacing:1px; }
-  .buycol { display:flex; flex-direction:column; gap:6px; min-width:200px; }
-  .buycol button { text-align:left; font-size:19px; } .buycol button b { color:var(--accent); margin-right:8px; }
+  #admin { background:rgba(5,6,8,.75); z-index:30; }
+  .apanel { background:var(--panel); backdrop-filter:blur(8px); border-top:3px solid var(--accent); width:min(1100px,100%); max-height:94vh; overflow:auto; padding:18px 22px; user-select:text; }
+  .ahead { display:flex; align-items:center; gap:14px; flex-wrap:wrap; } .ahead h2 { margin:0; font-size:28px; text-transform:uppercase; } .ahead button { margin-left:auto; }
+  .agrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px 24px; margin-top:10px; }
+  .agrid section.wide { grid-column:1/-1; }
+  .agrid h3 { margin:6px 0 4px; color:var(--accent); font-size:16px; text-transform:uppercase; letter-spacing:1px; }
+  .agrid label { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0; text-transform:none; letter-spacing:0; font-size:17px; color:var(--text); }
+  .agrid label.chk { justify-content:flex-start; }
+  .agrid input[type=number], .agrid select { width:110px; padding:5px 8px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 17px Rajdhani,sans-serif; }
+  .agrid input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
+  .agrid section > button { width:100%; margin:4px 0; font-size:15px; }
+  .prices { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:4px 24px; }
+  .prices label input { width:80px !important; }
+  #aPlayers { width:100%; border-collapse:collapse; font-size:17px; } #aPlayers td { padding:4px 6px; border-bottom:1px solid var(--line); }
+  #aPlayers button { padding:4px 8px; font-size:13px; margin-right:4px; }
+  #buyBody { display:flex; flex-wrap:wrap; gap:18px; }
+  #buyMoney { color:#7ee787; margin-left:10px; }
+  #buyzone { width:100%; color:#ff8a8a; font-weight:600; font-size:17px; } #buyzone:empty { display:none; }
+  .buycol { display:flex; flex-direction:column; gap:6px; min-width:220px; }
+  .buycol button { text-align:left; font-size:19px; display:flex; align-items:center; gap:8px; } .buycol button b { color:var(--accent); min-width:12px; }
+  .buycol .price { margin-left:auto; color:#7ee787; } .buycol button:disabled .price { color:var(--muted); }
+  .muted { color:var(--muted); }
+  #money { position:absolute; left:22px; bottom:84px; font-size:30px; font-weight:700; color:#7ee787; }
+  #moneypops { position:absolute; left:22px; bottom:122px; display:flex; flex-direction:column-reverse; gap:2px; }
+  .mpop { font-size:20px; font-weight:700; animation:mpop 2.2s forwards; } .mpop.plus { color:#7ee787; } .mpop.minus { color:#ff9b6b; }
+  @keyframes mpop { 0% { opacity:0; transform:translateY(8px); } 10% { opacity:1; transform:none; } 75% { opacity:1; } 100% { opacity:0; transform:translateY(-14px); } }
+  #buyhint { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); font-size:17px; color:#cfd6df; background:rgba(0,0,0,.45); padding:3px 12px; font-weight:600; display:none; }
+  #arm { display:none; align-items:center; gap:6px; margin-left:14px; font-size:32px; } #arm .shield { font-size:26px; color:#9ec3ff; } #helm { font-size:22px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="importmap">{ "imports": {
@@ -130,36 +156,72 @@
     <div class="keys">
       <b>W A S D</b> бег &nbsp; <b>Пробел</b> прыжок &nbsp; <b>Shift</b> шаг<br>
       <b>ЛКМ</b> огонь &nbsp; <b>ПКМ</b> прицел снайперки &nbsp; <b>R</b> перезарядка<br>
-      <b>1</b> основное <b>2</b> пистолет <b>3</b> нож &nbsp; <b>B</b> выбор оружия<br>
-      <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Побеждает команда, первой набравшая 25 убийств.
+      <b>1</b> основное <b>2</b> пистолет <b>3</b> нож &nbsp; <b>B</b> магазин (на своей базе)<br>
+      <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Деньги: убийство +$500, в голову +$1000, смерть — штраф.
     </div>
+    <button id="adminBtn" style="width:100%;margin-top:14px;display:none">⚙ Админ-панель</button>
     <div class="err" id="err2"></div>
+  </div>
+</div>
+
+<div id="admin" class="screen" style="display:none">
+  <div class="apanel">
+    <div class="ahead"><h2>⚙ Админ-панель</h2><span class="muted">изменения сразу действуют у всех игроков</span><button id="adminClose">Закрыть</button></div>
+    <div class="agrid">
+      <section><h3>Деньги</h3>
+        <label>Стартовые деньги, $<input type="number" data-cfg="startMoney" min="0" step="100"></label>
+        <label>За убийство, $<input type="number" data-cfg="killReward" min="0" step="50"></label>
+        <label>За убийство в голову, $<input type="number" data-cfg="headReward" min="0" step="50"></label>
+        <label>Штраф за смерть, $<input type="number" data-cfg="deathPenalty" min="0" step="50"></label>
+        <label>Максимум денег, $<input type="number" data-cfg="maxMoney" min="0" step="1000"></label>
+      </section>
+      <section><h3>Правила</h3>
+        <label>Убийств для победы<input type="number" data-cfg="winKills" min="1" max="500"></label>
+        <label>Возрождение через, сек<input type="number" data-cfg="respawn" min="0" max="30"></label>
+        <label class="chk"><input type="checkbox" data-cfg="loseWeapons"> Терять оружие при смерти</label>
+        <label class="chk"><input type="checkbox" data-cfg="buyAnywhere"> Покупать в любом месте карты</label>
+        <label class="chk"><input type="checkbox" data-cfg="infAmmo"> Бесконечные патроны</label>
+        <label class="chk"><input type="checkbox" data-cfg="ff"> Огонь по своим</label>
+        <label class="chk"><input type="checkbox" data-cfg="blood"> Кровь</label>
+        <label class="chk"><input type="checkbox" data-cfg="gore"> Отлетают части тела</label>
+      </section>
+      <section><h3>Боты</h3>
+        <label>Количество<select id="aBots"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+        <label>Сложность<select data-cfg="botLevel"><option value="0">Лёгкие</option><option value="1">Нормальные</option><option value="2">Сложные</option></select></label>
+        <h3 style="margin-top:16px">Матч</h3>
+        <button id="aRestart">Новый матч (сбросить счёт и деньги)</button>
+        <button id="aDefaults">Вернуть настройки по умолчанию</button>
+      </section>
+      <section class="wide"><h3>Цены, $ <span class="muted">(оружие · магазин патронов)</span></h3><div id="aPrices" class="prices"></div></section>
+      <section class="wide"><h3>Игроки</h3><table id="aPlayers"></table></section>
+    </div>
   </div>
 </div>
 
 <div id="hud">
   <div id="roomtag"></div>
   <div id="fps"></div>
-  <div id="score"><div class="c" id="sct">0</div><div class="mid">до 25</div><div class="tt" id="st">0</div></div>
+  <div id="score"><div class="c" id="sct">0</div><div class="mid" id="goal">до 25</div><div class="tt" id="st">0</div></div>
   <div id="feed"></div>
   <div id="cross"><i></i><i></i><i></i><i></i></div>
   <div id="hitmark"></div>
   <div id="dmg"></div>
   <div id="center"></div>
-  <div id="hp"><span class="plus">✚</span><span id="hpv">100</span><div class="meter"><div id="hpbar" style="width:100%"></div></div></div>
-  <div id="ammo"><div id="wname">Винтовка</div><div class="num"><span id="ammov">30</span> <small>/ ∞</small></div></div>
+  <div id="money">$0</div>
+  <div id="moneypops"></div>
+  <div id="buyhint">B — магазин</div>
+  <div id="hp"><span class="plus">✚</span><span id="hpv">100</span><div class="meter"><div id="hpbar" style="width:100%"></div></div>
+    <span id="arm"><span class="shield">⛉</span><span id="armv">0</span><span id="helm">⛑</span></span></div>
+  <div id="ammo"><div id="wname">Винтовка</div><div class="num"><span id="ammov">30</span> <small id="ammor">/ 90</small></div></div>
   <div id="scope"></div>
   <div id="buy">
     <div class="buyp">
-      <h2>Оружие <small>нажми цифру или кликни · B — закрыть</small></h2>
-      <div class="buycol"><h3>Основное</h3>
-        <button data-gun="ak47"><b>1</b> AK-47</button><button data-gun="m4"><b>2</b> M4A1</button>
-        <button data-gun="shotgun"><b>3</b> Дробовик</button><button data-gun="sniper"><b>4</b> Снайперка</button></div>
-      <div class="buycol"><h3>Пистолет</h3>
-        <button data-gun="deagle"><b>5</b> Desert Eagle</button><button data-gun="beretta"><b>6</b> Beretta</button></div>
+      <h2>Магазин <span id="buyMoney">$0</span> <small>цифра или клик · 9 — патроны · B — закрыть</small></h2>
+      <div id="buyzone"></div>
+      <div id="buyBody"></div>
     </div>
   </div>
-  <div id="board"><table><thead><tr><th>Игрок</th><th>Команда</th><th>Убийства</th><th>Смерти</th></tr></thead><tbody id="boardBody"></tbody></table></div>
+  <div id="board"><table><thead><tr><th>Игрок</th><th>Команда</th><th>Деньги</th><th>Убийства</th><th>Смерти</th></tr></thead><tbody id="boardBody"></tbody></table></div>
 </div>
 
 <script type="module">
@@ -177,22 +239,34 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // ================= settings =================
 // slot 1 = main gun, 2 = pistol, 3 = knife. pellets > 1 = shotgun; zoom = right mouse button scope
+// reserve = spare bullets the gun comes with; ap = share of damage that goes through armour (as in CS2)
 const WEAPONS = {
-  ak47:    { name:'AK-47',        slot:1, dmg:36, head:4, rate:0.1,  mag:30, auto:true,  spread:0.012, bloom:0.008, reload:2.4, range:200, kick:0.014 },
-  m4:      { name:'M4A1',         slot:1, dmg:31, head:4, rate:0.09, mag:30, auto:true,  spread:0.009, bloom:0.006, reload:2.2, range:200, kick:0.010 },
-  shotgun: { name:'Дробовик',     slot:1, dmg:16, head:2, rate:0.85, mag:8,  auto:false, spread:0.055, bloom:0,     reload:2.6, range:45,  kick:0.045, pellets:9 },
-  sniper:  { name:'Снайперка',    slot:1, dmg:95, head:2, rate:1.3,  mag:5,  auto:false, spread:0.035, bloom:0,     reload:3.0, range:300, kick:0.03,  zoom:true },
-  deagle:  { name:'Desert Eagle', slot:2, dmg:52, head:4, rate:0.35, mag:7,  auto:false, spread:0.008, bloom:0.03,  reload:2.0, range:200, kick:0.05 },
-  beretta: { name:'Beretta',      slot:2, dmg:24, head:4, rate:0.14, mag:15, auto:false, spread:0.006, bloom:0.01,  reload:1.6, range:200, kick:0.015 },
-  knife:   { name:'Нож',          slot:3, dmg:55, head:1, rate:0.45, mag:Infinity, auto:true, spread:0, bloom:0, reload:0, range:2.3, kick:0 },
+  ak47:    { name:'AK-47',        slot:1, dmg:36, head:4, rate:0.1,  mag:30, reserve:90,  auto:true,  spread:0.012, bloom:0.008, reload:2.4, range:200, kick:0.014, ap:0.775 },
+  m4:      { name:'M4A1',         slot:1, dmg:31, head:4, rate:0.09, mag:30, reserve:90,  auto:true,  spread:0.009, bloom:0.006, reload:2.2, range:200, kick:0.010, ap:0.7 },
+  shotgun: { name:'Дробовик',     slot:1, dmg:16, head:2, rate:0.85, mag:8,  reserve:32,  auto:false, spread:0.055, bloom:0,     reload:2.6, range:45,  kick:0.045, ap:0.5, pellets:9 },
+  sniper:  { name:'Снайперка',    slot:1, dmg:95, head:2, rate:1.3,  mag:5,  reserve:30,  auto:false, spread:0.035, bloom:0,     reload:3.0, range:300, kick:0.03,  ap:0.975, zoom:true },
+  deagle:  { name:'Desert Eagle', slot:2, dmg:52, head:4, rate:0.35, mag:7,  reserve:35,  auto:false, spread:0.008, bloom:0.03,  reload:2.0, range:200, kick:0.05,  ap:0.93 },
+  beretta: { name:'Beretta',      slot:2, dmg:24, head:4, rate:0.14, mag:15, reserve:120, auto:false, spread:0.006, bloom:0.01,  reload:1.6, range:200, kick:0.015, ap:0.5 },
+  knife:   { name:'Нож',          slot:3, dmg:55, head:1, rate:0.45, mag:Infinity, reserve:0, auto:true, spread:0, bloom:0, reload:0, range:2.3, kick:0, ap:0.85 },
 };
 const BUY = ['ak47','m4','shotgun','sniper','deagle','beretta'];
-const DEFAULT_GUN = { t:'ak47', ct:'m4' };
+const START_PISTOL = 'beretta';      // everyone spawns with it, like the free pistol in CS
+const DEFAULT_GUN = { t:'ak47', ct:'m4' }; // what bots carry
+const ITEM_NAME = { ...Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) => [k, w.name])), kevlar:'Бронежилет', helmet:'Бронежилет + шлем' };
+// the creator of the game can change all of these in the admin panel
+const DEFAULT_CFG = {
+  startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
+  winKills:25, respawn:3, ff:false, buyAnywhere:false, infAmmo:false, loseWeapons:true,
+  blood:true, gore:true, botLevel:1,
+  prices: { ak47:2700, m4:2900, shotgun:1050, sniper:4750, deagle:700, beretta:300, kevlar:650, helmet:1000 },
+  ammoPrices: { ak47:80, m4:80, shotgun:65, sniper:125, deagle:40, beretta:30 },
+};
+let cfg = structuredClone(DEFAULT_CFG);
 const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
-const WIN_KILLS = 25, RESPAWN_TIME = 3, RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
+const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
 const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3;
-const PEER_PREFIX = 'kidstrike-v2-'; // bump when the network messages change, so old tabs can't join new games
+const PEER_PREFIX = 'kidstrike-v3-'; // bump when the network messages change, so old tabs can't join new games
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
 
 const $ = s => document.querySelector(s);
@@ -534,7 +608,11 @@ function makeAvatar(id, name, team) {
   }
   // invisible boxes for bullets
   const hit = (w, h, d, y, part) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hitMat); m.position.y = y; m.userData = { pid:id, part }; body.add(m); return m; };
-  const hitParts = [hit(0.5, 0.9, 0.36, 0.45, 'body'), hit(0.6, 0.66, 0.4, 1.2, 'body'), hit(0.32, 0.32, 0.32, 1.66, 'head')];
+  // the model faces -Z, so its right side is +X
+  const hitParts = [hit(0.48, 0.66, 0.4, 1.2, 'body'), hit(0.32, 0.32, 0.32, 1.66, 'head'),
+    hit(0.2, 0.62, 0.3, 1.15, 'rarm'), hit(0.2, 0.62, 0.3, 1.15, 'larm'),
+    hit(0.23, 0.9, 0.34, 0.45, 'rleg'), hit(0.23, 0.9, 0.34, 0.45, 'lleg')];
+  hitParts[2].position.x = 0.35; hitParts[3].position.x = -0.35; hitParts[4].position.x = 0.12; hitParts[5].position.x = -0.12;
   g.add(nameSprite(name, team));
   g.userData = { body, mixer, acts, cur:'Idle', guns, hitParts };
   scene.add(g);
@@ -632,6 +710,166 @@ function worldFlash(pos) {
   fx.push({ objs:[s], t:0.05, life:0.05 });
 }
 
+// ================= blood and gore (both can be switched off in the admin panel) =================
+// droplets: one Points cloud with a fixed pool, cheap even with hundreds of drops
+const DROPS = 700;
+const dropPos = new Float32Array(DROPS * 3).fill(-999), dropVel = new Float32Array(DROPS * 3), dropLife = new Float32Array(DROPS);
+let dropNext = 0;
+const dropGeo = new THREE.BufferGeometry();
+dropGeo.setAttribute('position', new THREE.BufferAttribute(dropPos, 3));
+const dropTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const g = c.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(150,0,0,1)'); gr.addColorStop(0.6, 'rgba(110,0,0,.9)'); gr.addColorStop(1, 'rgba(80,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const drops = new THREE.Points(dropGeo, new THREE.PointsMaterial({ map: dropTex, size: 0.07, transparent: true, depthWrite: false, color: 0xb00000 }));
+drops.frustumCulled = false;
+scene.add(drops);
+function spray(at, dir, count, speed, spreadAmt = 1) {
+  for (let i = 0; i < count; i++) {
+    const k = dropNext; dropNext = (dropNext + 1) % DROPS;
+    dropPos[k*3] = at.x; dropPos[k*3+1] = at.y; dropPos[k*3+2] = at.z;
+    dropVel[k*3]   = dir.x * speed + (Math.random() - .5) * 2.5 * spreadAmt;
+    dropVel[k*3+1] = dir.y * speed + Math.random() * 2 * spreadAmt;
+    dropVel[k*3+2] = dir.z * speed + (Math.random() - .5) * 2.5 * spreadAmt;
+    dropLife[k] = 1.6;
+  }
+}
+// splats: flat irregular stains on the ground and walls
+const SPLAT_TEX = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random() * 6.28, r = Math.random() * (i < 6 ? 10 : 46);
+    const x = 64 + Math.cos(a) * r, y = 64 + Math.sin(a) * r, s = (i < 6 ? 30 : 4 + Math.random() * 12);
+    g.fillStyle = `rgba(${90 + Math.random() * 40},0,0,${0.75 + Math.random() * 0.25})`;
+    g.beginPath(); g.arc(x, y, s, 0, 6.28); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const splatMat = new THREE.MeshBasicMaterial({ map: SPLAT_TEX, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+const splatGeo = new THREE.PlaneGeometry(1, 1);
+const splats = [];
+function splat(point, normal, size, grow = 0) {
+  const m = new THREE.Mesh(splatGeo, splatMat);
+  m.position.copy(point).addScaledVector(normal, 0.012 + splats.length * 0.00002);
+  m.lookAt(point.clone().add(normal));
+  m.rotation.z = Math.random() * 6.28;
+  m.scale.setScalar(grow ? size * 0.2 : size);
+  m.userData = { size, grow };
+  scene.add(m); splats.push(m);
+  if (splats.length > 150) scene.remove(splats.shift());
+}
+const splatRay = new THREE.Raycaster();
+const UP = new THREE.Vector3(0, 1, 0);
+function bloodHit(m) {
+  if (!cfg.blood || !m.pt) return;
+  const at = new THREE.Vector3(...m.pt), dir = new THREE.Vector3(...(m.dir || [0, 0, -1])).normalize();
+  spray(at, dir, m.big ? 40 : 14, 3);
+  spray(at, dir.clone().negate(), m.big ? 10 : 4, 1.2); // a little comes back towards the shooter
+  // blood on the wall or floor behind the victim
+  splatRay.set(at, dir); splatRay.far = 3;
+  const h = splatRay.intersectObjects(worldMeshes, false)[0];
+  if (h && h.face) splat(h.point, h.face.normal.clone().transformDirection(h.object.matrixWorld), 0.4 + Math.random() * 0.4);
+}
+// gore: the part of the body hit by the killing bullet comes off and flies away from the shooter
+const LIMB_BONE = { head:'mixamorigHead', larm:'mixamorigLeftArm', rarm:'mixamorigRightArm', lleg:'mixamorigLeftUpLeg', rleg:'mixamorigRightUpLeg' };
+const gibs = [];
+function makeLimb(part, team) {
+  const armor = new THREE.MeshStandardMaterial({ color: TEAM_TINT[team], roughness: 0.6, metalness: 0.2 });
+  armor.color.multiplyScalar(0.55);
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.7 });
+  const flesh = new THREE.MeshStandardMaterial({ color: 0x7a0a0a, roughness: 0.4 });
+  const g = new THREE.Group();
+  if (part === 'head') {
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), armor));                       // helmet
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.07, 0.06), dark); visor.position.set(0, 0, -0.12); g.add(visor);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.07, 10), flesh); neck.position.y = -0.13; g.add(neck);
+    g.userData.r = 0.14;
+  } else {
+    const leg = part.endsWith('leg'), len = leg ? 0.8 : 0.6, r = leg ? 0.085 : 0.065;
+    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), armor); g.add(limb);
+    const end = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.9, len * 0.25, 4, 8), dark); end.position.y = -len * 0.45; g.add(end);
+    const cut = new THREE.Mesh(new THREE.CircleGeometry(r * 0.95, 12), flesh); cut.position.y = len / 2 + r * 0.6; cut.rotation.x = -Math.PI / 2; g.add(cut);
+    g.userData.r = r;
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+function killEffect(avatar, m) {
+  const u = avatar.userData, r = remotes.get(m.victim);
+  // fall away from the killer
+  if (m.from && r) {
+    const dx = m.from[0] - avatar.position.x, dz = m.from[2] - avatar.position.z;
+    r.deathYaw = Math.atan2(-dx, -dz);
+  }
+  const dir = m.from ? avatar.position.clone().sub(new THREE.Vector3(m.from[0], avatar.position.y, m.from[2])).normalize() : new THREE.Vector3(0, 0, 1);
+  if (cfg.blood) {
+    const centre = avatar.position.clone(); centre.y += m.part === 'head' ? 1.65 : 1.1;
+    spray(centre, dir, m.part === 'head' ? 70 : 45, 3.5, 1.4);
+    // a pool spreading under the body
+    setTimeout(() => splat(avatar.position.clone().addScaledVector(dir, 0.8).setY(0), UP, 1.6 + Math.random() * 0.6, 1), 700);
+  }
+  const boneName = LIMB_BONE[m.part];
+  if (!cfg.gore || !boneName) return;
+  const bone = u.body.getObjectByName(boneName);
+  if (!bone) return;
+  const start = bone.getWorldPosition(new THREE.Vector3());
+  bone.scale.setScalar(0.0001); // hide it on the body
+  u.hidden = bone;
+  const limb = makeLimb(m.part, r ? r.team : 'ct');
+  limb.position.copy(start);
+  scene.add(limb);
+  const speed = m.part === 'head' ? 6 : 4.5;
+  gibs.push({ obj: limb, vel: dir.clone().multiplyScalar(speed).add(new THREE.Vector3((Math.random() - .5) * 2, 3 + Math.random() * 2, (Math.random() - .5) * 2)),
+    spin: new THREE.Vector3(Math.random() * 12 - 6, Math.random() * 12 - 6, Math.random() * 12 - 6), life: 15, trail: 0,
+    stump: m.part === 'head' ? { bone: u.body.getObjectByName('mixamorigNeck'), t: 1.5 } : { bone: bone.parent, t: 1.0 } });
+}
+function restoreLimbs(avatar) {
+  const u = avatar.userData;
+  if (u.hidden) { u.hidden.scale.setScalar(1); u.hidden = null; }
+  const r = [...remotes.values()].find(q => q.avatar === avatar);
+  if (r) r.deathYaw = null;
+}
+function updateGore(dt) {
+  // droplets fall, and leave small stains where they land
+  for (let k = 0; k < DROPS; k++) {
+    if (dropLife[k] <= 0) continue;
+    dropLife[k] -= dt;
+    dropVel[k*3+1] -= 9.8 * dt;
+    dropPos[k*3] += dropVel[k*3] * dt; dropPos[k*3+1] += dropVel[k*3+1] * dt; dropPos[k*3+2] += dropVel[k*3+2] * dt;
+    if (dropPos[k*3+1] < 0.01 || dropLife[k] <= 0) {
+      if (dropPos[k*3+1] < 0.05 && Math.random() < 0.08) splat(new THREE.Vector3(dropPos[k*3], 0, dropPos[k*3+2]), UP, 0.15 + Math.random() * 0.2);
+      dropLife[k] = 0; dropPos[k*3+1] = -999;
+    }
+  }
+  dropGeo.attributes.position.needsUpdate = true;
+  for (const s of splats) if (s.userData.grow && s.scale.x < s.userData.size) s.scale.setScalar(Math.min(s.userData.size, s.scale.x + dt * 0.5));
+  // flying limbs: gravity, bounce, roll to a stop, bleed while flying, and the stump spurts
+  for (let i = gibs.length - 1; i >= 0; i--) {
+    const g = gibs[i], o = g.obj, rad = o.userData.r;
+    g.life -= dt;
+    g.vel.y -= 14 * dt;
+    o.position.addScaledVector(g.vel, dt);
+    o.rotation.x += g.spin.x * dt; o.rotation.y += g.spin.y * dt; o.rotation.z += g.spin.z * dt;
+    if (o.position.y < rad) {
+      o.position.y = rad;
+      if (Math.abs(g.vel.y) > 1.5 && cfg.blood) splat(o.position.clone().setY(0), UP, 0.3);
+      g.vel.y = Math.abs(g.vel.y) * 0.3; g.vel.x *= 0.6; g.vel.z *= 0.6; g.spin.multiplyScalar(0.5);
+    }
+    for (const b of colliders) if (b.containsPoint(o.position)) { g.vel.x *= -0.4; g.vel.z *= -0.4; o.position.addScaledVector(g.vel, dt * 2); }
+    g.trail -= dt;
+    if (cfg.blood && g.trail <= 0 && g.vel.lengthSq() > 1) { g.trail = 0.03; spray(o.position, g.vel.clone().normalize().negate(), 2, 0.5, 0.3); }
+    if (cfg.blood && g.stump && g.stump.t > 0 && g.stump.bone) {
+      g.stump.t -= dt;
+      if (Math.random() < 0.7) spray(g.stump.bone.getWorldPosition(new THREE.Vector3()), UP, 3, 2.5, 0.6);
+    }
+    if (g.life <= 0) { scene.remove(o); gibs.splice(i, 1); }
+  }
+}
+
 let actx, noiseBuf;
 function audio() {
   if (!actx) {
@@ -652,8 +890,9 @@ const FOLEY = { // [start s, length s, brightness 0..1, loudness]
   reload_pistol: [[0.1, 0.04, 0.8, 0.6], [0.75, 0.05, 0.85, 0.7], [1.2, 0.05, 0.95, 0.85]],
   pump:          [[0, 0.08, 0.45, 0.8], [0.2, 0.07, 0.6, 0.9]],
   bolt:          [[0, 0.05, 0.9, 0.7], [0.14, 0.07, 0.55, 0.6], [0.36, 0.06, 0.6, 0.6], [0.5, 0.05, 0.95, 0.8]],
-  step1: [[0, 0.09, 0.06, 1], [0.005, 0.05, 0.5, 0.12]], step2: [[0, 0.08, 0.07, 1], [0.01, 0.06, 0.45, 0.15]],
-  step3: [[0, 0.1, 0.05, 1], [0.004, 0.04, 0.55, 0.1]],  step4: [[0, 0.085, 0.065, 1], [0.008, 0.05, 0.4, 0.14]],
+  // footsteps: a soft crunch of sand, not a thump (a low thump sounded like distant gunfire)
+  step1: [[0, 0.05, 0.35, 0.22], [0.025, 0.04, 0.5, 0.12]], step2: [[0, 0.045, 0.3, 0.2], [0.02, 0.05, 0.45, 0.12]],
+  step3: [[0, 0.055, 0.4, 0.2], [0.03, 0.035, 0.55, 0.1]],  step4: [[0, 0.05, 0.32, 0.22], [0.022, 0.045, 0.5, 0.11]],
 };
 function synth(events) {
   const a = audio(), sr = a.sampleRate;
@@ -664,7 +903,7 @@ function synth(events) {
     let lp = 0;
     for (let i = 0; i < n && s + i < d.length; i++) {
       lp += (Math.random() * 2 - 1 - lp) * bright; // one-pole filter: low brightness = dull thud, high = metallic click
-      d[s + i] += lp * Math.exp(-i / (n * 0.22)) * gain * (bright < 0.1 ? 6 : 1);
+      d[s + i] += lp * Math.exp(-i / (n * 0.22)) * gain;
     }
   }
   return buf;
@@ -709,11 +948,15 @@ function beep(freq, dur, vol = .15, type = 'square') {
 // ================= local player =================
 const me = {
   pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: false,
-  alive: false, hp: 100, weapon: 'm4', ammo: {}, loadout: { 1:'m4', 2:'beretta', 3:'knife' }, zoom: false,
+  alive: false, hp: 100, weapon: START_PISTOL, zoom: false,
+  // ammo = bullets in the magazine, reserve = spare bullets; loadout[slot] = owned gun (null = empty slot)
+  ammo: {}, reserve: {}, loadout: { 1:null, 2:START_PISTOL, 3:'knife' },
+  money: 0, armor: 0, helmet: false,
   lastShot: 0, reloadEnd: 0, bloom: 0, firing: false, firedThisClick: false, stepDist: 0,
 };
-function refillAmmo() { for (const k in WEAPONS) me.ammo[k] = WEAPONS[k].mag; }
-refillAmmo();
+function giveWeapon(k) { me.ammo[k] = WEAPONS[k].mag; me.reserve[k] = WEAPONS[k].reserve; }
+function resetLoadout() { me.loadout = { 1:null, 2:START_PISTOL, 3:'knife' }; giveWeapon(START_PISTOL); me.weapon = START_PISTOL; }
+giveWeapon(START_PISTOL);
 const keys = {};
 let myId = null, started = false, locked = false, showBoard = false;
 
@@ -743,6 +986,9 @@ function startHost() {
     const url = location.origin + location.pathname + '?room=' + code;
     $('#link').value = url;
     $('#roomtag').textContent = 'Комната: ' + code;
+    loadCfg();
+    $('#adminBtn').style.display = 'block';
+    $('#goal').textContent = 'до ' + cfg.winKills;
     for (let i = 0; i < botCount; i++) addBot(i);
     hostHandle(myId, { t:'hello', name: myName, team: myTeam });
     enterGame();
@@ -809,12 +1055,21 @@ function hostSpawn(p) {
   if (p.bot) { p.pos.set(...p.p); p.vel.set(0,0,0); p.yaw = p.team === 'ct' ? Math.PI : 0; }
   else hostSend(p.id, { t:'spawn', p: p.p });
 }
+// buying works only near your own team's spawn, like the buy zone in CS (unless the admin allows it everywhere)
+function inBuyZone(team, pos) {
+  return cfg.buyAnywhere || (Math.abs(pos[0]) < 14 && Math.abs(pos[2] - (team === 'ct' ? -35 : 35)) < 8);
+}
+const LIMB_FACTOR = { head:1, body:1, larm:1, rarm:1, lleg:0.75, rleg:0.75 };
 function hostHandle(from, m) {
   if (m.t === 'hello') {
-    const p = { id: from, name: String(m.name || 'Игрок').slice(0, 14), team: m.team === 't' ? 't' : 'ct', hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: DEFAULT_GUN[m.team === 't' ? 't' : 'ct'] };
+    const team = m.team === 't' ? 't' : 'ct';
+    const p = { id: from, name: String(m.name || 'Игрок').slice(0, 14), team, hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: START_PISTOL,
+      money: cfg.startMoney, armor: 0, helmet: false };
     H.players.set(from, p);
+    hostSend(from, { t:'cfg', cfg });
     hostSpawn(p);
     hostBroadcast({ t:'info', text: p.name + ' зашёл за команду «' + TEAM_NAME[p.team] + '»' });
+    adminRefresh();
     return;
   }
   const p = H.players.get(from); if (!p) return;
@@ -822,29 +1077,68 @@ function hostHandle(from, m) {
   else if (m.t === 'shot') { if (p.alive) hostBroadcast({ t:'shot', id: from, o: m.o, e: m.e, es: m.es, w: m.w }, from); }
   else if (m.t === 'hit') {
     const w = WEAPONS[m.w]; if (!w || !p.alive) return;
+    const part = LIMB_FACTOR[m.part] ? m.part : 'body';
     const falloff = THREE.MathUtils.clamp(+m.f || 1, 0.25, 1); // shotgun pellets weaken with distance
-    hostDamage(from, m.target, Math.round((m.head ? w.dmg * w.head : w.dmg) * falloff), !!m.head, m.w);
+    const dmg = (part === 'head' ? w.dmg * w.head : w.dmg * LIMB_FACTOR[part]) * falloff;
+    hostDamage(from, m.target, dmg, part, m.w, m.pt, m.dir);
+  }
+  else if (m.t === 'buy') {
+    const item = String(m.item), ammoOf = item.startsWith('ammo:') ? item.slice(5) : null;
+    const price = ammoOf ? cfg.ammoPrices[ammoOf] : cfg.prices[item];
+    const no = why => hostSend(from, { t:'buyno', why });
+    if (price === undefined) return;
+    if (!p.alive) return no('Мёртвые не покупают');
+    if (!inBuyZone(p.team, p.p)) return no('Покупать можно только на своей базе');
+    if (item === 'helmet' && p.helmet && p.armor >= 100) return no('Уже есть');
+    if (item === 'kevlar' && p.armor >= 100) return no('Уже есть');
+    const cost = item === 'helmet' && p.armor >= 100 ? price - cfg.prices.kevlar : price; // helmet only, if vest is already on
+    if (p.money < cost) return no('Не хватает денег');
+    p.money -= cost;
+    if (item === 'kevlar' || item === 'helmet') { p.armor = 100; if (item === 'helmet') p.helmet = true; }
+    hostSend(from, { t:'bought', item, money: p.money, armor: p.armor, helmet: p.helmet });
   }
 }
-function hostDamage(fromId, targetId, dmg, head, w) {
+function hostDamage(fromId, targetId, dmg, part, w, pt, dir) {
   const a = H.players.get(fromId), v = H.players.get(targetId);
-  if (!a || !v || !v.alive || a.team === v.team || H.winLock) return;
+  if (!a || !v || !v.alive || H.winLock || a === v) return;
+  if (a.team === v.team && !cfg.ff) return;
+  // armour: vest protects body and arms, helmet the head; how much gets through depends on the gun
+  const covered = part === 'head' ? v.helmet : part !== 'lleg' && part !== 'rleg';
+  if (v.armor > 0 && covered) {
+    const ap = WEAPONS[w]?.ap ?? 0.8;
+    v.armor = Math.max(0, v.armor - Math.round(dmg * (1 - ap) / 2));
+    dmg *= ap;
+    if (v.armor === 0) v.helmet = false;
+  }
+  dmg = Math.max(1, Math.round(dmg));
   v.hp = Math.max(0, v.hp - dmg);
-  if (!v.bot) hostSend(v.id, { t:'dmg', hp: v.hp });
+  if (!v.bot) hostSend(v.id, { t:'dmg', hp: v.hp, armor: v.armor, helmet: v.helmet });
+  hostBroadcast({ t:'bl', id: v.id, part, pt, dir, big: v.hp <= 0 });
   if (v.hp <= 0) {
-    v.alive = false; v.d++; a.k++;
-    hostBroadcast({ t:'kill', killer: a.id, victim: v.id, kn: a.name, kt: a.team, vn: v.name, vt: v.team, head, w });
+    v.alive = false; v.d++;
+    const head = part === 'head';
+    let reward = 0;
+    if (a.team !== v.team) { a.k++; reward = head ? cfg.headReward : cfg.killReward; }
+    else a.k = Math.max(0, a.k - 1); // team kill costs a point
+    a.money = Math.min(cfg.maxMoney, a.money + reward);
+    v.money = Math.max(0, v.money - cfg.deathPenalty);
+    v.armor = 0; v.helmet = false;
+    hostBroadcast({ t:'kill', killer: a.id, victim: v.id, kn: a.name, kt: a.team, vn: v.name, vt: v.team, head, part, w, from: a.p,
+      reward, penalty: cfg.deathPenalty });
     const score = { ct:0, t:0 }; for (const q of H.players.values()) score[q.team] += q.k;
-    if (score[a.team] >= WIN_KILLS) {
+    if (score[a.team] >= cfg.winKills) {
       H.winLock = true;
       hostBroadcast({ t:'win', team: a.team });
-      setTimeout(() => {
-        for (const q of H.players.values()) { q.k = 0; q.d = 0; hostSpawn(q); }
-        H.winLock = false;
-        hostBroadcast({ t:'info', text:'Новый матч!' });
-      }, 6000);
-    } else setTimeout(() => { if (H.players.get(v.id) === v && !H.winLock) hostSpawn(v); }, RESPAWN_TIME * 1000);
+      setTimeout(() => hostRestart('Новый матч!'), 6000);
+    } else setTimeout(() => { if (H.players.get(v.id) === v && !H.winLock && !v.alive) hostSpawn(v); }, cfg.respawn * 1000);
   }
+}
+// new match: scores and money back to the start
+function hostRestart(text) {
+  for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; hostSpawn(q); }
+  H.winLock = false;
+  hostBroadcast({ t:'reset' });
+  hostBroadcast({ t:'info', text });
 }
 function hostTick(dt) {
   for (const b of H.bots) botThink(b, dt);
@@ -853,10 +1147,90 @@ function hostTick(dt) {
     H.snapTimer = 0.05;
     const r = v => Math.round(v * 100) / 100;
     const pl = [];
-    for (const p of H.players.values()) pl.push([p.id, p.name, p.team, r(p.p[0]), r(p.p[1]), r(p.p[2]), r(p.ry), r(p.rx), p.hp, p.alive ? 1 : 0, p.k, p.d, p.w]);
+    for (const p of H.players.values()) pl.push([p.id, p.name, p.team, r(p.p[0]), r(p.p[1]), r(p.p[2]), r(p.ry), r(p.rx), p.hp, p.alive ? 1 : 0, p.k, p.d, p.w, p.money, p.armor]);
     hostBroadcast({ t:'snap', pl });
   }
 }
+
+// ---------- admin panel (only the creator of the game, who is also the host, has it)
+let adminOpen = false;
+function loadCfg() {
+  try {
+    const saved = JSON.parse(store.get('ks-cfg', 'null'));
+    if (saved) cfg = { ...structuredClone(DEFAULT_CFG), ...saved,
+      prices: { ...DEFAULT_CFG.prices, ...saved.prices }, ammoPrices: { ...DEFAULT_CFG.ammoPrices, ...saved.ammoPrices } };
+  } catch {}
+}
+function pushCfg() {
+  store.set('ks-cfg', JSON.stringify(cfg));
+  hostBroadcast({ t:'cfg', cfg });
+}
+function toggleAdmin(open) {
+  if (!isHost) return;
+  adminOpen = open;
+  $('#admin').style.display = open ? 'flex' : 'none';
+  if (open) { if (locked) document.exitPointerLock(); $('#pause').style.display = 'none'; fillAdmin(); }
+  else $('#pause').style.display = started && !locked ? 'flex' : 'none';
+}
+function fillAdmin() {
+  document.querySelectorAll('#admin [data-cfg]').forEach(el => {
+    const v = cfg[el.dataset.cfg];
+    if (el.type === 'checkbox') el.checked = v; else el.value = v;
+  });
+  $('#aBots').value = H.bots.length;
+  const row = (key, name) => `<label>${name}<span><input type="number" min="0" step="50" data-price="${key}" value="${cfg.prices[key]}">` +
+    (cfg.ammoPrices[key] !== undefined ? ` <input type="number" min="0" step="5" data-ammo="${key}" value="${cfg.ammoPrices[key]}" title="магазин патронов">` : '') + `</span></label>`;
+  $('#aPrices').innerHTML = [...BUY, 'kevlar', 'helmet'].map(k => row(k, ITEM_NAME[k])).join('');
+  document.querySelectorAll('#aPrices input').forEach(el => el.onchange = () => {
+    const v = Math.max(0, Math.round(+el.value || 0));
+    if (el.dataset.price) cfg.prices[el.dataset.price] = v; else cfg.ammoPrices[el.dataset.ammo] = v;
+    pushCfg();
+  });
+  adminRefresh();
+}
+function adminRefresh() {
+  if (!adminOpen) return;
+  const rows = [...H.players.values()].filter(p => !p.bot);
+  $('#aPlayers').innerHTML = rows.map(p => `<tr><td class="n-${p.team}">${esc(p.name)}${p.id === myId ? ' (ты)' : ''}</td><td>${TEAM_NAME[p.team]}</td>` +
+    `<td style="color:#7ee787">$${p.money}</td><td>${p.k} / ${p.d}</td><td style="text-align:right">` +
+    `<button data-act="give" data-id="${p.id}">+$1000</button><button data-act="take" data-id="${p.id}">−$1000</button>` +
+    `<button data-act="zero" data-id="${p.id}">$0</button><button data-act="team" data-id="${p.id}">Сменить команду</button>` +
+    (p.id === myId ? '' : `<button data-act="kick" data-id="${p.id}">Выгнать</button>`) + `</td></tr>`).join('');
+  document.querySelectorAll('#aPlayers [data-act]').forEach(b => b.onclick = () => adminAction(b.dataset.act, b.dataset.id));
+}
+function adminAction(act, id) {
+  const p = H.players.get(id); if (!p) return;
+  if (act === 'give') p.money = Math.min(cfg.maxMoney, p.money + 1000);
+  if (act === 'take') p.money = Math.max(0, p.money - 1000);
+  if (act === 'zero') p.money = 0;
+  if (act === 'team') {
+    p.team = p.team === 'ct' ? 't' : 'ct';
+    hostSend(id, { t:'team', team: p.team });
+    hostBroadcast({ t:'info', text: `${p.name} теперь за «${TEAM_NAME[p.team]}»` });
+    hostSpawn(p);
+  }
+  if (act === 'kick') {
+    hostSend(id, { t:'kicked' });
+    setTimeout(() => { conns.get(id)?.close(); hostRemove(id); adminRefresh(); }, 300);
+  }
+  adminRefresh();
+}
+function setBotCount(n) {
+  while (H.bots.length > n) { const b = H.bots.pop(); H.players.delete(b.id); }
+  while (H.bots.length < n) addBot(H.bots.length);
+}
+document.querySelectorAll('#admin [data-cfg]').forEach(el => el.onchange = () => {
+  const k = el.dataset.cfg;
+  cfg[k] = el.type === 'checkbox' ? el.checked : Math.max(0, Math.round(+el.value || 0));
+  if (k === 'winKills') cfg.winKills = Math.max(1, cfg.winKills);
+  pushCfg();
+});
+$('#aBots').onchange = e => setBotCount(+e.target.value);
+$('#aRestart').onclick = () => { hostRestart('Админ начал новый матч!'); adminRefresh(); };
+$('#aDefaults').onclick = () => { cfg = structuredClone(DEFAULT_CFG); pushCfg(); fillAdmin(); };
+$('#adminClose').onclick = () => toggleAdmin(false);
+$('#adminBtn').onclick = () => toggleAdmin(true);
+setInterval(adminRefresh, 1000); // keep money and scores in the player list fresh
 
 // ---------- bots (run only on the host)
 const NAV = [];
@@ -869,7 +1243,7 @@ function buildNav() {
 function addBot(i) {
   const team = i % 2 === 0 ? (myTeam === 'ct' ? 't' : 'ct') : myTeam;
   const id = 'bot' + i;
-  const b = { id, bot:true, name: BOT_NAMES[i % BOT_NAMES.length], team, hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: DEFAULT_GUN[team],
+  const b = { id, bot:true, name: BOT_NAMES[i % BOT_NAMES.length], team, hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: DEFAULT_GUN[team], money:0, armor:0, helmet:false,
     pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw:0, goal:null, nextShot:0, seen:null, stuckT:0, lastPos: new THREE.Vector3(), strafe:1, strafeT:0 };
   H.players.set(id, b); H.bots.push(b);
   hostSpawn(b);
@@ -891,7 +1265,8 @@ function botThink(b, dt) {
   const t = now();
   let mx = 0, mz = 0, speed = RUN * 0.8;
   if (enemy) {
-    if (b.seen !== enemy.id) { b.seen = enemy.id; b.nextShot = t + 0.55 + Math.random()*0.4; }
+    const lvl = cfg.botLevel; // 0 easy, 1 normal, 2 hard
+    if (b.seen !== enemy.id) { b.seen = enemy.id; b.nextShot = t + [0.9, 0.55, 0.3][lvl] + Math.random()*0.4; }
     const dx = enemy.p[0] - b.pos.x, dz = enemy.p[2] - b.pos.z;
     b.yaw += (((Math.atan2(-dx, -dz) - b.yaw + Math.PI*3) % (Math.PI*2)) - Math.PI) * Math.min(1, dt * 10);
     // pick a calm strafe (or stand still) for a while instead of twitching side to side
@@ -900,11 +1275,16 @@ function botThink(b, dt) {
     if (t >= b.nextShot) {
       b.nextShot = t + 0.35 + Math.random()*0.45;
       const target = new THREE.Vector3(enemy.p[0], enemy.p[1] + 1.2, enemy.p[2]);
-      const acc = THREE.MathUtils.clamp(0.55 - best * 0.012, 0.15, 0.5);
+      const acc = THREE.MathUtils.clamp(0.55 - best * 0.012, 0.15, 0.5) * [0.6, 1, 1.4][lvl];
       const hit = Math.random() < acc;
       const end = hit ? target : target.clone().add(new THREE.Vector3((Math.random()-.5)*2, (Math.random()-.5)*1.5, (Math.random()-.5)*2));
       hostBroadcast({ t:'shot', id: b.id, o: [eye.x, eye.y - .2, eye.z], e: [end.x, end.y, end.z], w: b.w });
-      if (hit) { const head = Math.random() < 0.08; hostDamage(b.id, enemy.id, head ? 60 : 17, head, b.w); }
+      if (hit) {
+        const roll = Math.random();
+        const part = roll < [0.05, 0.08, 0.14][lvl] ? 'head' : roll < 0.6 ? 'body' : ['larm','rarm','lleg','rleg'][Math.floor(Math.random() * 4)];
+        const dir = target.clone().sub(eye).normalize();
+        hostDamage(b.id, enemy.id, part === 'head' ? 60 : 17, part, b.w, [target.x, target.y, target.z], [dir.x, dir.y, dir.z]);
+      }
     }
   } else {
     b.seen = null;
@@ -934,12 +1314,15 @@ function clientHandle(m) {
     case 'snap': {
       const seen = new Set();
       teamScore = { ct:0, t:0 };
-      for (const [id, name, team, x, y, z, ry, rx, hp, alive, k, d, w] of m.pl) {
+      for (const [id, name, team, x, y, z, ry, rx, hp, alive, k, d, w, money, armor] of m.pl) {
         seen.add(id); teamScore[team] += k;
+        if (id === myId) { me.money = money; me.armor = armor; if (!armor) me.helmet = false; }
         let r = remotes.get(id);
+        if (r && r.team !== team) { if (r.avatar) scene.remove(r.avatar); remotes.delete(id); r = null; } // switched team: new uniform
         if (!r) { r = { id, name, team, buf: [], speed: 0, back: false, target: new THREE.Vector3(x, y, z), avatar: id === myId ? null : makeAvatar(id, name, team) }; if (r.avatar) r.avatar.position.set(x, y, z); remotes.set(id, r); }
         if (r.alive && !alive) r.buf.length = 0;
-        Object.assign(r, { alive: !!alive, k, d, hp, w });
+        if (!r.alive && alive && r.avatar) restoreLimbs(r.avatar); // respawned: put the body back together
+        Object.assign(r, { alive: !!alive, k, d, hp, w, money });
         r.target.set(x, y, z);
         // position history for smooth interpolation (drawn ~100 ms in the past)
         const last = r.buf[r.buf.length - 1];
@@ -954,11 +1337,33 @@ function clientHandle(m) {
     case 'spawn':
       me.pos.set(...m.p); me.vel.set(0,0,0); me.alive = true; me.hp = 100;
       me.yaw = myTeam === 'ct' ? Math.PI : 0; me.pitch = 0;
-      refillAmmo(); me.reloadEnd = 0; me.zoom = false;
+      for (const s of [1, 2]) if (me.loadout[s]) giveWeapon(me.loadout[s]); // fresh ammo for what you still own
+      me.weapon = me.loadout[1] || me.loadout[2];
+      me.reloadEnd = 0; setZoom(false);
       showCenter('', 0);
       break;
+    case 'cfg':
+      cfg = m.cfg;
+      $('#goal').textContent = 'до ' + cfg.winKills;
+      renderBuyMenu();
+      break;
+    case 'bought': {
+      me.money = m.money; me.armor = m.armor; me.helmet = m.helmet;
+      const item = m.item;
+      if (item.startsWith('ammo:')) { const g = item.slice(5); me.reserve[g] = (me.reserve[g] || 0) + WEAPONS[g].mag; }
+      else if (WEAPONS[item]) { me.loadout[WEAPONS[item].slot] = item; giveWeapon(item); me.weapon = null; switchWeapon(item); }
+      playSample('draw', 0.5);
+      moneyPopup(-1, ITEM_NAME[item] || 'Патроны');
+      renderBuyMenu();
+      break;
+    }
+    case 'buyno': showCenter(`<small>${esc(m.why)}</small>`, 1.5); playSample('empty', 0.5); break;
+    case 'reset': resetLoadout(); break;
+    case 'team': myTeam = m.team; resetLoadout(); break;
+    case 'kicked': showCenter('Создатель игры убрал тебя из игры.', 9999); started = false; document.exitPointerLock(); peer?.destroy(); break;
+    case 'bl': bloodHit(m); break;
     case 'dmg':
-      me.hp = m.hp;
+      me.hp = m.hp; me.armor = m.armor; me.helmet = m.helmet;
       $('#dmg').style.opacity = 1; setTimeout(() => $('#dmg').style.opacity = 0, 150);
       beep(140, .12, .12, 'sawtooth');
       break;
@@ -969,15 +1374,23 @@ function clientHandle(m) {
         for (const p of m.es || [m.e]) { const e = new THREE.Vector3(...p); tracer(o, e); dustPuff(e); }
       }
       const dist = o.distanceTo(me.pos);
-      playShot(m.w, 1 / (1 + dist * 0.06), dist);
+      // behind walls a shot is quieter and duller
+      const ear = me.pos.clone(); ear.y += EYE;
+      const blocked = dist > 3 && !lineOfSight(ear, o);
+      playShot(m.w, (blocked ? 0.45 : 1) / (1 + dist * 0.11), dist * (blocked ? 3 : 1));
       break;
     }
     case 'kill': {
       const icon = WEAPONS[m.w] ? WEAPONS[m.w].name : '▸';
       addFeed(`<span class="n-${m.kt}">${esc(m.kn)}</span> ${icon}${m.head ? ' ✸' : ''} <span class="n-${m.vt}">${esc(m.vn)}</span>`, m.killer === myId || m.victim === myId);
-      if (m.victim === myId) { me.alive = false; me.firing = false; showCenter(`Тебя подстрелил <span class="n-${m.kt}">${esc(m.kn)}</span><br><small>Возрождение через ${RESPAWN_TIME} сек…</small>`, RESPAWN_TIME); }
-      if (m.killer === myId) beep(880, .15, .12, 'triangle');
-      const r = remotes.get(m.victim); if (r) r.alive = false;
+      if (m.victim === myId) {
+        me.alive = false; me.firing = false; setZoom(false);
+        if (cfg.loseWeapons) resetLoadout();
+        showCenter(`Тебя подстрелил <span class="n-${m.kt}">${esc(m.kn)}</span><br><small>Возрождение через ${cfg.respawn} сек…${m.penalty ? ' · штраф −$' + m.penalty : ''}</small>`, cfg.respawn);
+      }
+      if (m.killer === myId) { beep(880, .15, .12, 'triangle'); if (m.reward) moneyPopup(m.reward, m.head ? 'выстрел в голову' : 'убийство'); }
+      const r = remotes.get(m.victim);
+      if (r) { r.alive = false; if (r.avatar) killEffect(r.avatar, m); }
       break;
     }
     case 'win':
@@ -986,6 +1399,14 @@ function clientHandle(m) {
       break;
     case 'info': addFeed(esc(m.text)); break;
   }
+}
+// "+$500 убийство" / "−$2700 AK-47" next to the money counter
+function moneyPopup(amount, label) {
+  const d = document.createElement('div');
+  d.className = 'mpop ' + (amount > 0 ? 'plus' : 'minus');
+  d.textContent = amount > 0 ? `+$${amount} ${label}` : label;
+  $('#moneypops').appendChild(d);
+  setTimeout(() => d.remove(), 2200);
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
 function addFeed(html, mine) {
@@ -1003,10 +1424,10 @@ function showCenter(html, secs) {
 
 // ================= input =================
 const canvas = renderer.domElement;
-function lock() { audio().resume(); canvas.requestPointerLock(); }
+function lock() { audio().resume(); canvas.requestPointerLock()?.catch?.(() => {}); } // a refused lock just leaves the pause menu up
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
-  $('#pause').style.display = locked || !started ? 'none' : 'flex';
+  $('#pause').style.display = locked || !started || buyOpen || adminOpen ? 'none' : 'flex';
   if (!locked) { me.firing = false; for (const k in keys) keys[k] = false; }
 });
 $('#resume').onclick = lock;
@@ -1024,33 +1445,62 @@ addEventListener('mousedown', e => {
 });
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mouseup', e => { if (e.button === 0) me.firing = false; });
-addEventListener('wheel', e => { if (!locked) return; const s = WEAPONS[me.weapon].slot; selectSlot((s + (e.deltaY > 0 ? 0 : 1)) % 3 + 1); });
+addEventListener('wheel', e => {
+  if (!locked) return;
+  let s = WEAPONS[me.weapon].slot;
+  do s = (s + (e.deltaY > 0 ? 0 : 1)) % 3 + 1; while (!me.loadout[s]); // skip empty slots
+  selectSlot(s);
+});
+// ---- buy menu (B), like in CS: the cursor appears, click or press the number
 let buyOpen = false;
-function toggleBuy(open) { buyOpen = open; $('#buy').style.display = open ? 'flex' : 'none'; }
-function buy(k) {
-  const slot = WEAPONS[k].slot;
-  me.loadout[slot] = k; me.ammo[k] = WEAPONS[k].mag;
-  me.weapon = null; selectSlot(slot);
-  store.set('ks-gun' + slot, k);
-  toggleBuy(false);
+const BUY_KEYS = [...BUY, 'kevlar', 'helmet']; // 1..8; 9 = ammo for the gun in your hands
+function toggleBuy(open) {
+  if (open && !me.alive) return;
+  buyOpen = open;
+  $('#buy').style.display = open ? 'flex' : 'none';
+  if (open) { renderBuyMenu(); me.firing = false; if (locked) document.exitPointerLock(); }
+  else if (started) lock();
 }
-document.querySelectorAll('#buy [data-gun]').forEach(b => b.onclick = () => buy(b.dataset.gun));
+function renderBuyMenu() {
+  const zone = me.alive && inBuyZone(myTeam, [me.pos.x, me.pos.y, me.pos.z]);
+  $('#buyzone').textContent = zone ? '' : 'Ты не на своей базе — вернись к месту возрождения, чтобы покупать';
+  const btn = (key, item, price, owned) =>
+    `<button data-item="${item}" ${!zone || owned || me.money < price ? 'disabled' : ''}><b>${key}</b>${esc(ITEM_NAME[item] || item)}<span class="price">${owned ? 'есть' : '$' + price}</span></button>`;
+  const P = cfg.prices;
+  const helmetPrice = me.armor >= 100 ? P.helmet - P.kevlar : P.helmet;
+  const ammoBtns = [1, 2].map(s => me.loadout[s]).filter(Boolean).map(g =>
+    `<button data-item="ammo:${g}" ${!zone || me.money < cfg.ammoPrices[g] ? 'disabled' : ''}><b>${g === me.weapon ? 9 : ''}</b>Патроны ${WEAPONS[g].name} (+${WEAPONS[g].mag})<span class="price">$${cfg.ammoPrices[g]}</span></button>`).join('');
+  $('#buyBody').innerHTML =
+    `<div class="buycol"><h3>Винтовки и дробовик</h3>${['ak47','m4','shotgun','sniper'].map((g, i) => btn(i + 1, g, P[g], me.loadout[1] === g)).join('')}</div>` +
+    `<div class="buycol"><h3>Пистолеты</h3>${['deagle','beretta'].map((g, i) => btn(i + 5, g, P[g], me.loadout[2] === g)).join('')}` +
+    `<h3 style="margin-top:12px">Снаряжение</h3>${btn(7, 'kevlar', P.kevlar, me.armor >= 100)}${btn(8, 'helmet', helmetPrice, me.armor >= 100 && me.helmet)}</div>` +
+    `<div class="buycol"><h3>Патроны</h3>${ammoBtns || '<span class="muted">Нет оружия</span>'}</div>`;
+  $('#buyMoney').textContent = '$' + me.money;
+  document.querySelectorAll('#buyBody [data-item]').forEach(b => b.onclick = () => buy(b.dataset.item));
+}
+function buy(item) { sendToHost({ t:'buy', item }); }
 addEventListener('keydown', e => {
   if (!started) return;
   keys[e.code] = true;
   if (e.code === 'Tab') { e.preventDefault(); showBoard = true; }
+  if (adminOpen) { if (e.code === 'Escape') toggleAdmin(false); return; } // typing numbers in the admin panel
   if (e.code === 'KeyB') { toggleBuy(!buyOpen); return; }
   const n = +e.code.replace('Digit', '');
-  if (buyOpen) { if (n >= 1 && n <= BUY.length) buy(BUY[n - 1]); if (e.code === 'Escape') toggleBuy(false); return; }
+  if (buyOpen) {
+    if (n >= 1 && n <= 8) buy(BUY_KEYS[n - 1]);
+    if (n === 9 && me.weapon !== 'knife') buy('ammo:' + me.weapon);
+    if (e.code === 'Escape') toggleBuy(false);
+    return;
+  }
   if (n >= 1 && n <= 3) selectSlot(n);
   if (e.code === 'KeyR') startReload();
 });
 addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Tab') showBoard = false; });
 
 let drawT = 0;
-function selectSlot(slot) { switchWeapon(me.loadout[slot]); }
+function selectSlot(slot) { if (me.loadout[slot]) switchWeapon(me.loadout[slot]); }
 function switchWeapon(w) {
-  if (me.weapon === w) return;
+  if (!w || me.weapon === w) return;
   me.weapon = w; me.reloadEnd = 0; me.lastShot = now() - 0.5; me.bloom = 0; drawT = 0.35;
   setZoom(false);
   playSample('draw', 0.5);
@@ -1065,6 +1515,7 @@ const RELOAD_SND = { ak47:'reload_rifle', m4:'reload_rifle', shotgun:'pump', sni
 function startReload() {
   const w = WEAPONS[me.weapon];
   if (me.weapon === 'knife' || me.reloadEnd || me.ammo[me.weapon] >= w.mag || !me.alive) return;
+  if (!cfg.infAmmo && !me.reserve[me.weapon]) { showCenter('<small>Патроны кончились — купи на базе (B)</small>', 1.5); return; }
   me.reloadEnd = now() + w.reload; setZoom(false);
   if (!playSample(RELOAD_SND[me.weapon], 0.6)) beep(300, .05, .08);
 }
@@ -1095,10 +1546,11 @@ function tryFire() {
     ends.push(hit ? hit.point : origin.clone().addScaledVector(dir, Math.min(w.range, 120)));
     if (hit && hit.object.userData.pid) {
       const r = remotes.get(hit.object.userData.pid);
-      if (r && r.team !== myTeam) {
-        const head = hit.object.userData.part === 'head';
+      if (r && (r.team !== myTeam || cfg.ff)) {
+        const part = hit.object.userData.part, head = part === 'head';
         const f = w.pellets ? THREE.MathUtils.clamp(1.15 - hit.distance / 25, 0.25, 1) : 1;
-        sendToHost({ t:'hit', target: r.id, head, w: me.weapon, f });
+        const r2 = v => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
+        sendToHost({ t:'hit', target: r.id, part, w: me.weapon, f, pt: r2(hit.point), dir: r2(dir) });
         hitAny = true; headAny ||= head;
       }
     } else if (hit && hit.face) {
@@ -1138,10 +1590,7 @@ function enterGame() {
 $('#go').onclick = () => {
   myName = $('#name').value.trim() || (joinCode ? 'Игрок' : 'Хозяин');
   store.set('ks-name', myName);
-  me.loadout = { 1: store.get('ks-gun1', DEFAULT_GUN[myTeam]), 2: store.get('ks-gun2', 'beretta'), 3: 'knife' };
-  if (!WEAPONS[me.loadout[1]]) me.loadout[1] = DEFAULT_GUN[myTeam];
-  if (!WEAPONS[me.loadout[2]]) me.loadout[2] = 'beretta';
-  me.weapon = me.loadout[1];
+  resetLoadout();
   $('#go').disabled = true; $('#go').textContent = 'Подключение…';
   if (typeof Peer === 'undefined') { showErr('Не загрузилась сетевая библиотека. Проверь интернет.'); return; }
   joinCode ? startClient() : startHost();
@@ -1170,7 +1619,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, toggleAdmin, killEffect, H, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
@@ -1206,12 +1655,18 @@ function frame() {
       me.vel.y -= GRAVITY * dt;
       me.onGround = moveBody(me.pos, me.vel, dt);
       if (me.firing) tryFire();
-      if (me.reloadEnd && t >= me.reloadEnd) { me.ammo[me.weapon] = WEAPONS[me.weapon].mag; me.reloadEnd = 0; if (!SND.reload_rifle) beep(500, .05, .08); }
+      if (me.reloadEnd && t >= me.reloadEnd) {
+        // move bullets from the spare ammo into the magazine (endless if the admin turned that on)
+        const k = me.weapon, need = WEAPONS[k].mag - me.ammo[k];
+        const take = cfg.infAmmo ? need : Math.min(need, me.reserve[k] || 0);
+        me.ammo[k] += take; if (!cfg.infAmmo) me.reserve[k] -= take;
+        me.reloadEnd = 0;
+      }
       me.bloom = Math.max(0, me.bloom - dt * 0.08);
       const hs = Math.hypot(me.vel.x, me.vel.z);
       bob += hs * dt * 1.6;
       // own footsteps when running (Shift = quiet walk, like in CS)
-      if (me.onGround && hs > 4) { me.stepDist += hs * dt; if (me.stepDist > 1.8) { me.stepDist = 0; playSample('step' + (1 + Math.floor(Math.random() * 4)), 0.22); } }
+      if (me.onGround && hs > 4) { me.stepDist += hs * dt; if (me.stepDist > 1.8) { me.stepDist = 0; playSample('step' + (1 + Math.floor(Math.random() * 4)), 0.12); } }
     }
     camera.position.set(me.pos.x, me.pos.y + (me.alive ? EYE : 0.4), me.pos.z);
     camera.rotation.set(me.pitch, me.yaw, me.alive ? 0 : 0.5);
@@ -1241,7 +1696,7 @@ function frame() {
         const k = s1 === s0 ? 1 : THREE.MathUtils.clamp((renderT - s0.t) / (s1.t - s0.t), 0, 1);
         a.position.set(s0.x + (s1.x - s0.x) * k, s0.y + (s1.y - s0.y) * k, s0.z + (s1.z - s0.z) * k);
         const dy = ((s1.ry - s0.ry + Math.PI*3) % (Math.PI*2)) - Math.PI;
-        a.rotation.y = s0.ry + dy * k;
+        a.rotation.y = !r.alive && r.deathYaw != null ? r.deathYaw : s0.ry + dy * k;
         // speed from the position history, smoothed so the animation doesn't flicker
         const sA = buf[Math.max(0, i - 3)], span = s1.t - sA.t;
         const vx = span > 0 ? (s1.x - sA.x) / span : 0, vz = span > 0 ? (s1.z - sA.z) / span : 0;
@@ -1258,12 +1713,12 @@ function frame() {
       else if (sp > (anim === 'Idle' ? 0.7 : 0.4)) anim = 'Walk';
       setAnim(a, anim);
       if (anim !== 'Idle') u.acts[anim].setEffectiveTimeScale(THREE.MathUtils.clamp(sp / ANIM_SPEED[anim], 0.6, 1.5) * (r.back ? -1 : 1));
-      u.mixer.update(r.alive ? dt : 0);
+      if (r.alive) u.mixer.update(dt); // a dead body keeps its last pose (and its missing limbs)
       for (const k in u.guns) u.guns[k].visible = r.alive && r.w === k;
       // footsteps of nearby players
       if (r.alive && sp > 3.4) {
         r.stepDist = (r.stepDist || 0) + sp * dt;
-        if (r.stepDist > 1.7) { r.stepDist = 0; const d = a.position.distanceTo(me.pos); if (d < 25) playSample('step' + (1 + Math.floor(Math.random() * 4)), 0.35 / (1 + d * 0.25), d); }
+        if (r.stepDist > 1.7) { r.stepDist = 0; const d = a.position.distanceTo(me.pos); if (d < 20) playSample('step' + (1 + Math.floor(Math.random() * 4)), 0.15 / (1 + d * 0.3), d); }
       }
     }
 
@@ -1273,11 +1728,18 @@ function frame() {
     const w = WEAPONS[me.weapon];
     $('#wname').textContent = w.name + (me.reloadEnd ? ' — перезарядка' : '');
     $('#ammov').textContent = me.weapon === 'knife' ? '—' : me.ammo[me.weapon];
+    $('#ammor').textContent = me.weapon === 'knife' ? '' : '/ ' + (cfg.infAmmo ? '∞' : me.reserve[me.weapon] ?? 0);
+    $('#money').textContent = '$' + me.money;
+    $('#arm').style.display = me.armor > 0 ? 'flex' : 'none';
+    $('#armv').textContent = me.armor; $('#helm').style.display = me.helmet ? 'inline' : 'none';
+    $('#buyhint').style.display = me.alive && !buyOpen && inBuyZone(myTeam, [me.pos.x, me.pos.y, me.pos.z]) ? 'block' : 'none';
+    if (buyOpen) { const m = '$' + me.money; if ($('#buyMoney').textContent !== m) renderBuyMenu(); }
     $('#sct').textContent = teamScore.ct; $('#st').textContent = teamScore.t;
     $('#board').style.display = showBoard ? 'block' : 'none';
     if (showBoard) {
       const rows = [...remotes.values()].sort((a, b) => a.team.localeCompare(b.team) || b.k - a.k);
-      $('#boardBody').innerHTML = rows.map(r => `<tr class="${r.alive ? '' : 'dead'}"><td class="n-${r.team}">${esc(r.name)}${r.id === myId ? ' (ты)' : ''}</td><td>${TEAM_NAME[r.team]}</td><td>${r.k}</td><td>${r.d}</td></tr>`).join('');
+      // like in CS, you see only your teammates' money
+      $('#boardBody').innerHTML = rows.map(r => `<tr class="${r.alive ? '' : 'dead'}"><td class="n-${r.team}">${esc(r.name)}${r.id === myId ? ' (ты)' : ''}</td><td>${TEAM_NAME[r.team]}</td><td>${r.team === myTeam && r.money !== undefined && !String(r.id).startsWith('bot') ? '$' + r.money : ''}</td><td>${r.k}</td><td>${r.d}</td></tr>`).join('');
     }
   } else {
     for (const k in vmModels) vmModels[k].visible = false;
@@ -1286,6 +1748,7 @@ function frame() {
     camera.lookAt(0, 2, 0);
   }
 
+  updateGore(dt);
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i];
     f.t -= dt;
