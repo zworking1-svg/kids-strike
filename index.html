@@ -2,7 +2,9 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Kids Strike</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -77,6 +79,43 @@
   .buyp { background:var(--panel); backdrop-filter:blur(8px); border-top:3px solid var(--accent); padding:18px 22px; display:flex; flex-wrap:wrap; gap:18px; max-width:94vw; }
   .buyp h2 { width:100%; margin:0; font-size:26px; text-transform:uppercase; letter-spacing:1px; } .buyp h2 small { font-size:15px; color:var(--muted); letter-spacing:0; text-transform:none; margin-left:8px; }
   .buyp h3 { margin:0 0 8px; color:var(--muted); font-size:14px; text-transform:uppercase; letter-spacing:1px; }
+  /* ---- phones and tablets */
+  #touchLayer, #joyBase, #joyKnob, #tButtons, #rotate { display:none; }
+  body.touch #touchLayer { display:block; position:absolute; inset:0; pointer-events:auto; touch-action:none; }
+  body.touch #tButtons { display:block; }
+  #joyBase { position:absolute; width:120px; height:120px; margin:-60px 0 0 -60px; border-radius:50%; border:2px solid rgba(255,255,255,.35); background:rgba(255,255,255,.08); pointer-events:none; }
+  #joyKnob { position:absolute; width:56px; height:56px; margin:-28px 0 0 -28px; border-radius:50%; background:rgba(255,255,255,.45); pointer-events:none; }
+  .tb { position:absolute; pointer-events:auto; touch-action:none; display:flex; align-items:center; justify-content:center; width:58px; height:58px; border-radius:50%;
+    background:rgba(15,18,24,.45); border:2px solid rgba(255,255,255,.35); color:#fff; font:700 22px Rajdhani,sans-serif; user-select:none; -webkit-user-select:none; }
+  .tb.on { background:rgba(232,163,61,.55); border-color:var(--accent); }
+  .tb.big { width:84px; height:84px; font-size:34px; right:calc(24px + env(safe-area-inset-right)); bottom:96px; }
+  .tb.wide { width:auto; padding:0 16px; border-radius:24px; height:44px; font-size:18px; }
+  #tJump { right:calc(122px + env(safe-area-inset-right)); bottom:40px; }
+  #tReload { right:calc(122px + env(safe-area-inset-right)); bottom:118px; width:50px; height:50px; }
+  #tSwitch { right:calc(194px + env(safe-area-inset-right)); bottom:40px; width:52px; height:52px; }
+  #tNade { right:calc(32px + env(safe-area-inset-right)); bottom:196px; width:50px; height:50px; }
+  #tScope { right:calc(108px + env(safe-area-inset-right)); bottom:186px; width:50px; height:50px; }
+  #tBuy { left:calc(14px + env(safe-area-inset-left)); top:112px; display:none; }
+  #tPause { left:calc(10px + env(safe-area-inset-left)); top:8px; width:42px; height:42px; font-size:18px; }
+  #tScore { left:calc(60px + env(safe-area-inset-left)); top:8px; width:42px; height:42px; font-size:18px; }
+  #rotate { position:fixed; inset:0; z-index:60; background:#0b0d10; color:var(--text); align-items:center; justify-content:center; text-align:center; font-size:26px; font-weight:700; }
+  body.touch #roomtag, body.touch #fps { left:112px; }
+  body.touch #hp { left:calc(10px + env(safe-area-inset-left)); top:56px; bottom:auto; font-size:24px; padding:2px 12px; background:rgba(0,0,0,.4); }
+  body.touch #hp .meter { width:70px; }
+  body.touch #money { top:60px; bottom:auto; left:auto; right:14px; font-size:22px; }
+  body.touch #moneypops { top:88px; bottom:auto; left:auto; right:14px; }
+  body.touch #ammo { bottom:auto; top:120px; right:0; padding:2px 14px; }
+  body.touch #ammo .num { font-size:28px; }
+  body.touch #feed { top:4px; right:8px; } body.touch #feed div { font-size:14px; }
+  body.touch #score > div { font-size:22px; padding:3px 12px; min-width:52px; }
+  body.touch #center { font-size:24px; } body.touch .keys { display:none; }
+  body.touch .panel { padding:12px 16px; max-height:100%; overflow:auto; } body.touch h1 { font-size:26px; }
+  body.touch .sub { display:none; } body.touch label { margin:8px 0 4px; font-size:12px; }
+  body.touch input[type=text] { padding:6px 10px; font-size:17px; } body.touch button { padding:7px 10px; font-size:15px; }
+  body.touch button.main { margin-top:10px; padding:9px; font-size:18px; }
+  body.touch .screen { align-items:flex-start; overflow:auto; }
+  body.touch .buyp { max-height:92vh; overflow:auto; } body.touch .buycol { min-width:170px; } body.touch .buycol button { font-size:16px; padding:8px 10px; }
+  @media (max-width: 700px) { .panel { margin-left:0; } }
   #admin { background:rgba(5,6,8,.75); z-index:30; }
   .apanel { background:var(--panel); backdrop-filter:blur(8px); border-top:3px solid var(--accent); width:min(1100px,100%); max-height:94vh; overflow:auto; padding:18px 22px; user-select:text; }
   .ahead { display:flex; align-items:center; gap:14px; flex-wrap:wrap; } .ahead h2 { margin:0; font-size:28px; text-transform:uppercase; } .ahead button { margin-left:auto; }
@@ -206,7 +245,22 @@
   </div>
 </div>
 
+<div id="rotate"><div>📱↻<br>Поверни телефон горизонтально</div></div>
+
 <div id="hud">
+  <div id="touchLayer"></div>
+  <div id="joyBase"></div><div id="joyKnob"></div>
+  <div id="tButtons">
+    <div class="tb" id="tPause">⏸</div>
+    <div class="tb" id="tScore">☰</div>
+    <div class="tb big" id="tFire">🎯</div>
+    <div class="tb" id="tJump">⤒</div>
+    <div class="tb" id="tReload">R</div>
+    <div class="tb" id="tSwitch">⇄</div>
+    <div class="tb" id="tNade">💣</div>
+    <div class="tb" id="tScope">🔭</div>
+    <div class="tb wide" id="tBuy">$ Магазин</div>
+  </div>
   <div id="roomtag"></div>
   <div id="fps"></div>
   <div id="score"><div class="c" id="sct">0</div><div class="mid" id="goal">до 25</div><div class="tt" id="st">0</div></div>
@@ -226,7 +280,7 @@
   <div id="scope"></div>
   <div id="buy">
     <div class="buyp">
-      <h2>Магазин <span id="buyMoney">$0</span> <small>цифра или клик · 0 — патроны · B — закрыть</small></h2>
+      <h2>Магазин <span id="buyMoney">$0</span> <small>нажми, чтобы купить · 0 — патроны · B — закрыть</small></h2>
       <div id="buyzone"></div>
       <div id="buyBody"></div>
     </div>
@@ -250,11 +304,19 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 // ================= settings =================
 // slot 1 = main gun, 2 = pistol, 3 = knife. pellets > 1 = shotgun; zoom = right mouse button scope
 // reserve = spare bullets the gun comes with; ap = share of damage that goes through armour (as in CS2)
+// pen = bullets go straight through walls and props and still hit with full damage behind them (rifles, machine guns, laser)
+// proj = fires an explosive projectile instead of a bullet; spin = barrels must spin up first; heavy = slows you down
 const WEAPONS = {
-  ak47:    { name:'AK-47',        slot:1, dmg:36, head:4, rate:0.1,  mag:30, reserve:90,  auto:true,  spread:0.012, bloom:0.008, reload:2.4, range:200, kick:0.014, ap:0.775 },
-  m4:      { name:'M4A1',         slot:1, dmg:31, head:4, rate:0.09, mag:30, reserve:90,  auto:true,  spread:0.009, bloom:0.006, reload:2.2, range:200, kick:0.010, ap:0.7 },
+  ak47:    { name:'AK-47',        slot:1, dmg:36, head:4, rate:0.1,  mag:30, reserve:90,  auto:true,  spread:0.012, bloom:0.008, reload:2.4, range:200, kick:0.014, ap:0.775, pen:true },
+  m4:      { name:'M4A1',         slot:1, dmg:31, head:4, rate:0.09, mag:30, reserve:90,  auto:true,  spread:0.009, bloom:0.006, reload:2.2, range:200, kick:0.010, ap:0.7, pen:true },
+  uzi:     { name:'Uzi',          slot:1, dmg:22, head:3, rate:0.065,mag:32, reserve:128, auto:true,  spread:0.016, bloom:0.007, reload:2.0, range:120, kick:0.009, ap:0.55 },
   shotgun: { name:'Дробовик',     slot:1, dmg:16, head:2, rate:0.85, mag:8,  reserve:32,  auto:false, spread:0.055, bloom:0,     reload:2.6, range:45,  kick:0.045, ap:0.5, pellets:9 },
-  sniper:  { name:'Снайперка',    slot:1, dmg:95, head:2, rate:1.3,  mag:5,  reserve:30,  auto:false, spread:0.035, bloom:0,     reload:3.0, range:300, kick:0.03,  ap:0.975, zoom:true },
+  dbshotgun:{ name:'Двустволка',  slot:1, dmg:15, head:2, rate:0.25, mag:2,  reserve:24,  auto:false, spread:0.075, bloom:0,     reload:2.4, range:35,  kick:0.08,  ap:0.5, pellets:14 },
+  sniper:  { name:'Снайперка',    slot:1, dmg:95, head:2, rate:1.3,  mag:5,  reserve:30,  auto:false, spread:0.035, bloom:0,     reload:3.0, range:300, kick:0.03,  ap:0.975, zoom:true, pen:true },
+  laser:   { name:'Лазерная винтовка', slot:1, dmg:34, head:3, rate:0.14, mag:40, reserve:120, auto:true, spread:0.002, bloom:0, reload:2.5, range:300, kick:0.004, ap:1, pen:true, beam:true },
+  minigun: { name:'Миниган',      slot:1, dmg:24, head:3, rate:0.04, mag:200,reserve:400, auto:true,  spread:0.02,  bloom:0.003, reload:4.5, range:200, kick:0.004, ap:0.8, pen:true, spin:0.6, heavy:0.7 },
+  launcher:{ name:'Гранатомёт',   slot:1, dmg:0,  head:1, rate:0.9,  mag:6,  reserve:12,  auto:false, spread:0.004, bloom:0,     reload:3.5, range:0,   kick:0.06,  ap:0.5, proj:{ speed:26, gravity:12, power:0.8, radius:7, model:'nade' } },
+  rpg:     { name:'РПГ',          slot:1, dmg:0,  head:1, rate:1.2,  mag:1,  reserve:4,   auto:false, spread:0.002, bloom:0,     reload:3.0, range:0,   kick:0.08,  ap:0.5, heavy:0.85, proj:{ speed:42, gravity:1.5, power:1.4, radius:9, model:'rocket' } },
   deagle:  { name:'Desert Eagle', slot:2, dmg:52, head:4, rate:0.35, mag:7,  reserve:35,  auto:false, spread:0.008, bloom:0.03,  reload:2.0, range:200, kick:0.05,  ap:0.93 },
   beretta: { name:'Beretta',      slot:2, dmg:24, head:4, rate:0.14, mag:15, reserve:120, auto:false, spread:0.006, bloom:0.01,  reload:1.6, range:200, kick:0.015, ap:0.5 },
   knife:   { name:'Нож',          slot:3, dmg:55, head:1, rate:0.45, mag:Infinity, reserve:0, auto:true, spread:0, bloom:0, reload:0, range:2.3, kick:0, ap:0.85 },
@@ -262,7 +324,14 @@ const WEAPONS = {
 };
 // the blast kills within ~2 m, badly hurts at 4–5 m and still scratches at 8 m
 const NADE = { fuse: 1.6, radius: 9, maxDmg: 165, throwSpeed: 15, lobSpeed: 7 };
-const BUY = ['ak47','m4','shotgun','sniper','deagle','beretta'];
+const BUY = ['ak47','m4','uzi','shotgun','dbshotgun','sniper','laser','minigun','launcher','rpg','deagle','beretta'];
+// shop sections
+const BUY_GROUPS = [
+  ['Пистолеты', ['deagle','beretta']],
+  ['Пистолеты-пулемёты и дробовики', ['uzi','shotgun','dbshotgun']],
+  ['Винтовки', ['ak47','m4','sniper','laser']],
+  ['Тяжёлое оружие', ['minigun','launcher','rpg']],
+];
 const START_PISTOL = 'beretta';      // everyone spawns with it, like the free pistol in CS
 const DEFAULT_GUN = { t:'ak47', ct:'m4' }; // what bots carry
 const ITEM_NAME = { ...Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) => [k, w.name])), kevlar:'Бронежилет', helmet:'Бронежилет + шлем' };
@@ -271,21 +340,24 @@ const DEFAULT_CFG = {
   startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
   winKills:25, respawn:3, ff:false, buyAnywhere:false, infAmmo:false, loseWeapons:true,
   blood:true, gore:true, botLevel:1, maxNades:1, nadePower:100,
-  prices: { ak47:2700, m4:2900, shotgun:1050, sniper:4750, deagle:700, beretta:300, kevlar:650, helmet:1000, grenade:300 },
-  ammoPrices: { ak47:80, m4:80, shotgun:65, sniper:125, deagle:40, beretta:30 },
+  prices: { ak47:2700, m4:2900, uzi:1200, shotgun:1050, dbshotgun:1400, sniper:4750, laser:4500, minigun:7000, launcher:5000, rpg:6500,
+    deagle:700, beretta:300, kevlar:650, helmet:1000, grenade:300 },
+  ammoPrices: { ak47:80, m4:80, uzi:50, shotgun:65, dbshotgun:50, sniper:125, laser:150, minigun:300, launcher:400, rpg:800, deagle:40, beretta:30 },
 };
 let cfg = structuredClone(DEFAULT_CFG);
 const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
 const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
 const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3;
-const PEER_PREFIX = 'kidstrike-v5-'; // bump when the network messages change, so old tabs can't join new games
+const PEER_PREFIX = 'kidstrike-v6-'; // bump when the network messages change, so old tabs can't join new games
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
 
 const $ = s => document.querySelector(s);
 const now = () => performance.now() / 1000;
 const params = new URLSearchParams(location.search);
 const joinCode = params.get('room');
+// phone / tablet: the main pointer is a finger (?touch=1 forces it for testing on a computer)
+const IS_TOUCH = params.has('touch') || matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 1 && !matchMedia('(pointer: fine)').matches);
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
 // ================= menu =================
@@ -355,7 +427,8 @@ composer.addPass(bloom);
 composer.addPass(new SMAAPass());
 composer.addPass(new OutputPass());
 
-let quality = +store.get('ks-quality', 2), qualityChosen = store.get('ks-quality', null) !== null;
+// phones start on low graphics (no post effects, no shadows), computers on high; both can change it in the pause menu
+let quality = +store.get('ks-quality', IS_TOUCH ? 0 : 2), qualityChosen = store.get('ks-quality', null) !== null;
 function applyQuality(q) {
   quality = q;
   renderer.setPixelRatio(q === 0 ? 1 : Math.min(devicePixelRatio, q === 2 ? 1.5 : 1.25));
@@ -364,6 +437,7 @@ function applyQuality(q) {
   composer.setSize(innerWidth, innerHeight);
   gtao.enabled = q === 2;
   sun.shadow.mapSize.set(q === 0 ? 1024 : 2048, q === 0 ? 1024 : 2048);
+  sun.castShadow = q > 0;
   if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
   document.querySelectorAll('.q').forEach(b => b.classList.toggle('sel', +b.dataset.q === q));
 }
@@ -416,7 +490,7 @@ function gunMaterial(name, gun) {
   return GUN_MAT.gunmetal;
 }
 const objLoader = new OBJLoader(manager);
-for (const gun of ['ak47','m4','shotgun','deagle']) {
+for (const gun of ['ak47','m4','shotgun','deagle','uzi','dbshotgun']) {
   objLoader.load(`assets/models/guns/${gun}.obj`, o => {
     o.traverse(c => {
       if (!c.isMesh) return;
@@ -515,11 +589,11 @@ const CRATES = [[-4,-14],[4,14],[16,-20],[-16,20],[-20,0],[20,0],[-33,-30],[33,3
 // ---- how materials resist (real-life inspired): plaster/adobe is soft, sandstone is hard, the stone cap is in between
 const CELL = 0.5;                                                          // wall block size, metres
 const WALL_HP = { wall: 260, blue: 240, outer: 420, low: 380, trim: 220 }; // what a block takes before it breaks
-const BLAST_HOLE = { wall: 1.75, blue: 1.75, outer: 1.15, low: 1.3 };     // hole radius from a grenade, metres
+const BLAST_HOLE = { wall: 2.7, blue: 2.7, outer: 2.0, low: 2.3 };       // hole radius from a grenade, metres (~3 grenades level a whole wall)
 // bullet power against walls: bigger calibre chips more and breaks through sooner
-const PEN = { beretta: 14, m4: 28, ak47: 38, deagle: 55, sniper: 140, shotgun: 8, knife: 0 };
+const PEN = { beretta: 14, uzi: 18, m4: 28, ak47: 38, deagle: 55, sniper: 140, shotgun: 8, dbshotgun: 9, laser: 45, minigun: 30, knife: 0 };
 // bullet hole size in metres: 9 mm < 5.56 < 7.62 < .50 AE < sniper round
-const HOLE = { beretta: 0.045, m4: 0.055, ak47: 0.07, deagle: 0.085, sniper: 0.11, shotgun: 0.035 };
+const HOLE = { beretta: 0.045, uzi: 0.045, m4: 0.055, ak47: 0.07, minigun: 0.07, deagle: 0.085, sniper: 0.11, shotgun: 0.035, dbshotgun: 0.035, laser: 0.05 };
 
 const walls = [];
 class Wall {
@@ -617,6 +691,15 @@ class Wall {
       for (let k = 1; k <= 2 && !near; k++) near = (i - k >= 0 && ground[i - k] > j) || (i + k < n && ground[i + k] > j);
       if (!near) solid[c] = 0;
     }
+    // 3) thin fragments left standing (up to 1 m wide and over 2 m tall) are unstable and topple
+    for (let i = 0; i < n;) {
+      if (ground[i] === 0) { i++; continue; }
+      let e = i, top = 0;
+      while (e < n && ground[e] > 0) { top = Math.max(top, ground[e]); e++; }
+      const wide = e - i, isWhole = wide === n;
+      if (!isWhole && wide <= 2 && top > 4) for (let k = i; k < e; k++) for (let j = 1; j < this.R; j++) solid[j * n + k] = 0;
+      i = e;
+    }
     const seen = new Uint8Array(solid.length), stack = [];
     for (let i = 0; i < n; i++) if (solid[i]) { seen[i] = 1; stack.push(i); }
     while (stack.length) {
@@ -694,7 +777,7 @@ function buildMap() {
   scene.add(ground); worldMeshes.push(ground);
   for (const [x, z, w, d, h, type, y0 = 0] of MAP) {
     const m = new THREE.Mesh(boxGeo(w, h, d, MAT[type].userData.tile), MAT[type]);
-    m.position.set(x, y0 + h/2, z); m.castShadow = m.receiveShadow = true; m.userData = { mat: 'stone' };
+    m.position.set(x, y0 + h/2, z); m.castShadow = m.receiveShadow = true; m.userData = { mat: 'stone', border: true };
     scene.add(m); worldMeshes.push(m);
     addCollider(m);
   }
@@ -785,8 +868,57 @@ function prepareSoldier() {
   soldierScale = 1.8 / (box.max.y - box.min.y);
 }
 // every gun model is normalised the same way: centred, muzzle along +X, real-world length in metres
-const GUN_SRC = { ak47:'ak47', m4:'m4', shotgun:'shotgun', sniper:'bolt_action_rifle_7_62', deagle:'deagle', beretta:'service_pistol' };
-const GUN_LEN = { ak47:0.88, m4:0.84, shotgun:1.0, sniper:1.15, deagle:0.27, beretta:0.22 };
+const GUN_SRC = { ak47:'ak47', m4:'m4', shotgun:'shotgun', sniper:'bolt_action_rifle_7_62', deagle:'deagle', beretta:'service_pistol',
+  uzi:'uzi', dbshotgun:'dbshotgun', laser:'proc_laser', minigun:'proc_minigun', launcher:'proc_launcher', rpg:'proc_rpg' };
+const GUN_LEN = { ak47:0.88, m4:0.84, shotgun:1.0, sniper:1.15, deagle:0.27, beretta:0.22, uzi:0.45, dbshotgun:0.8, laser:0.95, minigun:1.0, launcher:0.8, rpg:1.1 };
+// guns nobody gives away for free are built here from simple parts, muzzle along +X like the downloaded ones
+function buildProceduralGuns() {
+  const M = (geo, mat, x = 0, y = 0, z = 0, rz = 0, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.z = rz; m.rotation.x = rx; return m; };
+  const cyl = (r, len, seg = 14) => new THREE.CylinderGeometry(r, r, len, seg);
+  const box = (x, y, z) => new THREE.BoxGeometry(x, y, z);
+  const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 2.5, 3) });
+  const glowRed = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.3, 0.2) });
+  const olive = new THREE.MeshStandardMaterial({ color: 0x4b5232, roughness: 0.7, metalness: 0.3 });
+  const white = new THREE.MeshStandardMaterial({ color: 0xd8dce2, roughness: 0.3, metalness: 0.4 });
+  // laser rifle: white shell, glowing cyan coils and emitter
+  const laser = new THREE.Group();
+  laser.add(M(box(0.55, 0.11, 0.07), white, 0, 0, 0));
+  laser.add(M(cyl(0.028, 0.45), GUN_MAT.gunmetal, 0.45, 0.02, 0, Math.PI / 2));
+  for (let i = 0; i < 4; i++) laser.add(M(new THREE.TorusGeometry(0.035, 0.008, 6, 16), glow, 0.32 + i * 0.07, 0.02, 0, 0, 0).rotateY(Math.PI / 2));
+  laser.add(M(cyl(0.02, 0.03), glow, 0.69, 0.02, 0, Math.PI / 2));
+  laser.add(M(box(0.06, 0.16, 0.05), GUN_MAT.black, -0.05, -0.12, 0, -0.25));
+  laser.add(M(box(0.22, 0.07, 0.06), white, -0.36, -0.03, 0));
+  laser.add(M(box(0.16, 0.05, 0.03), glow, 0, 0.07, 0));
+  MODELS.proc_laser = laser;
+  // minigun: six barrels around a spinning core, motor housing, ammo box
+  const mini = new THREE.Group();
+  const barrels = new THREE.Group(); barrels.name = 'barrels';
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; barrels.add(M(cyl(0.012, 0.6, 8), GUN_MAT.gunmetal, 0, Math.cos(a) * 0.035, Math.sin(a) * 0.035, Math.PI / 2)); }
+  barrels.add(M(cyl(0.05, 0.03), GUN_MAT.steel, 0.2, 0, 0, Math.PI / 2)); barrels.add(M(cyl(0.05, 0.03), GUN_MAT.steel, -0.15, 0, 0, Math.PI / 2));
+  barrels.position.x = 0.35; mini.add(barrels);
+  mini.add(M(cyl(0.07, 0.28), GUN_MAT.black, -0.05, 0, 0, Math.PI / 2));
+  mini.add(M(box(0.18, 0.14, 0.12), olive, -0.12, -0.12, 0.05));
+  mini.add(M(box(0.05, 0.12, 0.04), GUN_MAT.black, -0.2, -0.1, -0.05, -0.3));
+  mini.add(M(new THREE.TorusGeometry(0.06, 0.01, 6, 14, Math.PI), GUN_MAT.steel, -0.05, 0.08, 0));
+  MODELS.proc_minigun = mini;
+  // grenade launcher: short fat barrel and a revolver drum
+  const gl = new THREE.Group();
+  gl.add(M(cyl(0.042, 0.4), GUN_MAT.black, 0.2, 0.02, 0, Math.PI / 2));
+  gl.add(M(cyl(0.075, 0.16, 6), olive, -0.02, 0.0, 0, Math.PI / 2));
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; gl.add(M(cyl(0.022, 0.165), GUN_MAT.gunmetal, -0.02, Math.cos(a) * 0.045, Math.sin(a) * 0.045, Math.PI / 2)); }
+  gl.add(M(box(0.05, 0.14, 0.04), GUN_MAT.black, -0.13, -0.11, 0, -0.3));
+  gl.add(M(box(0.25, 0.06, 0.05), GUN_MAT.black, -0.25, -0.03, 0));
+  MODELS.proc_launcher = gl;
+  // RPG: long tube with a pointed warhead loaded at the front
+  const rpg = new THREE.Group();
+  rpg.add(M(cyl(0.045, 0.9), olive, 0, 0, 0, Math.PI / 2));
+  rpg.add(M(cyl(0.065, 0.12), GUN_MAT.black, -0.42, 0, 0, Math.PI / 2));
+  rpg.add(M(new THREE.ConeGeometry(0.07, 0.22, 12), olive, 0.62, 0, 0, -Math.PI / 2));
+  rpg.add(M(cyl(0.05, 0.1), GUN_MAT.gunmetal, 0.48, 0, 0, Math.PI / 2));
+  rpg.add(M(box(0.04, 0.13, 0.04), GUN_MAT.black, 0.02, -0.1, 0)); rpg.add(M(box(0.04, 0.13, 0.04), GUN_MAT.black, -0.18, -0.1, 0));
+  rpg.add(M(box(0.08, 0.05, 0.03), GUN_MAT.black, 0.05, 0.07, 0));
+  MODELS.proc_rpg = rpg;
+}
 function gunModel(kind) {
   const m = MODELS[GUN_SRC[kind]].clone();
   const box = new THREE.Box3().setFromObject(m);
@@ -860,6 +992,12 @@ const VM_POSE = {
   m4:      [0.17, -0.2,  -0.68, 0.08],
   shotgun: [0.17, -0.21, -0.76, 0.08],
   sniper:  [0.17, -0.19, -0.83, 0.08],
+  uzi:     [0.16, -0.17, -0.6,  0.08],
+  dbshotgun:[0.16, -0.2, -0.7,  0.08],
+  laser:   [0.17, -0.2,  -0.9,  0.07],
+  minigun: [0.18, -0.26, -0.75, 0.05],
+  launcher:[0.17, -0.22, -0.85, 0.07],
+  rpg:     [0.22, -0.13, -0.95, 0.03],
   deagle:  [0.12, -0.12, -0.36, 0.06],
   beretta: [0.11, -0.11, -0.31, 0.06],
 };
@@ -1119,14 +1257,37 @@ function stepNade(n, dt) {
   }
 }
 const clientNades = new Map();
+function rocketMesh() {
+  const g = new THREE.Group(), olive = new THREE.MeshStandardMaterial({ color: 0x4b5232, roughness: 0.7, metalness: 0.3 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 10).rotateX(Math.PI / 2), olive); g.add(body);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 10).rotateX(Math.PI / 2), olive); tip.position.z = 0.3; g.add(tip);
+  for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.09, 0.1), GUN_MAT.gunmetal); f.position.z = -0.18; f.rotation.z = i * Math.PI / 2; f.position.y = 0; g.add(f); }
+  const fire = new THREE.Sprite(new THREE.SpriteMaterial({ map: FLASH_TEX, color: new THREE.Color(4, 2.2, 0.8), blending: THREE.AdditiveBlending, depthWrite: false }));
+  fire.position.z = -0.28; fire.scale.setScalar(0.3); g.add(fire);
+  return g;
+}
 function spawnNade(m) {
-  const obj = grenadeMesh(1.4);
+  const P = m.w && WEAPONS[m.w].proj;
+  const obj = P ? (P.model === 'rocket' ? rocketMesh() : grenadeMesh(1.6)) : grenadeMesh(1.4);
   obj.position.set(...m.o);
   scene.add(obj);
-  clientNades.set(m.nid, { obj, pos: new THREE.Vector3(...m.o), vel: new THREE.Vector3(...m.v), t: 0, acc: 0 });
+  clientNades.set(m.nid, { obj, pos: new THREE.Vector3(...m.o), vel: new THREE.Vector3(...m.v), t: 0, acc: 0, impact: !!P, g: P?.gravity, rocket: P?.model === 'rocket', trail: 0 });
+  if (P) { const d = new THREE.Vector3(...m.o).distanceTo(me.pos); playShot(m.w, 1 / (1 + d * 0.08), d); }
 }
 function updateNades(dt) {
   for (const n of clientNades.values()) {
+    if (n.impact) {
+      // shells fly until the host says where they blew up; rockets point along their path and leave smoke
+      if (!n.hit) stepProj(n, dt, false);
+      n.obj.position.copy(n.pos);
+      if (n.vel.lengthSq() > 0.1) n.obj.lookAt(n.pos.clone().add(n.vel));
+      n.trail -= dt;
+      if (n.rocket && !n.hit && n.trail <= 0) {
+        n.trail = 0.02;
+        booms.push([puff(SMOKE_TEX, n.pos.clone(), n.vel.clone().multiplyScalar(-0.05).add(new THREE.Vector3(0, 0.3, 0)), { size: 0.35, grow: 4, life: 1.6, drag: 1, fade: 0.55, tint: 0xd8d8d8 })]);
+      }
+      continue;
+    }
     stepNade(n, dt);
     n.obj.position.copy(n.pos);
     const sp = n.vel.length();
@@ -1652,19 +1813,37 @@ function hostShotWorld(o, e, w) {
   if (len < 0.01) return;
   dir.normalize();
   worldRay.set(O, dir); worldRay.far = len + 0.05;
-  const hit = worldRay.intersectObjects(worldMeshes, false)[0];
-  if (!hit) return;
-  const ud = hit.object.userData || {}, pen = PEN[w] || 0;
-  if (ud.wall) {
-    const wall = ud.wall, k = hit.object === wall.meshes[1] ? 1 : 0, c = wall.inst[k][hit.instanceId];
-    if (c === undefined) return;
-    wall.hp[c] -= pen;
-    if (wall.hp[c] <= 0) hostBreakWall(wall, [c], null, []);
-  } else if (ud.prop !== undefined) {
-    const p = props[ud.prop];
-    if (!p.alive || p.hp === Infinity) return;
-    p.hp -= pen * (p.kind === 'cardboard' ? 2 : 1);
-    if (p.hp <= 0) hostBreakProp(p, null, 'shot', null);
+  // a piercing bullet wears down everything along its path, others only the first thing they hit
+  for (const hit of worldRay.intersectObjects(worldMeshes, false)) {
+    const ud = hit.object.userData || {}, pen = PEN[w] || 0;
+    if (ud.wall) {
+      const wall = ud.wall, k = hit.object === wall.meshes[1] ? 1 : 0, c = wall.inst[k][hit.instanceId];
+      if (c !== undefined) { wall.hp[c] -= pen; if (wall.hp[c] <= 0) hostBreakWall(wall, [c], null, []); }
+    } else if (ud.prop !== undefined) {
+      const p = props[ud.prop];
+      if (p.alive && p.hp !== Infinity) { p.hp -= pen * (p.kind === 'cardboard' ? 2 : 1); if (p.hp <= 0) hostBreakProp(p, null, 'shot', null); }
+    }
+    if (!WEAPONS[w]?.pen || stopsBullets(hit)) break;
+  }
+}
+// grenade launcher / RPG shells: flown by the host, they blow up on the first thing they touch
+function hostLaunch(from, w, o, v) {
+  const P = WEAPONS[w].proj, nid = from + ':' + (nadeSeq++);
+  hostNades.push({ nid, from, w, impact: true, g: P.gravity, power: P.power, radius: P.radius, pos: new THREE.Vector3(...o), vel: new THREE.Vector3(...v), t: 0, acc: 0 });
+  hostBroadcast({ t:'nade', nid, id: from, o, v, w });
+}
+function stepProj(n, dt, players) {
+  n.acc += dt; n.t += dt;
+  const h = 0.005;
+  while (n.acc >= h && !n.hit) {
+    n.acc -= h;
+    n.vel.y -= n.g * h;
+    n.pos.addScaledVector(n.vel, h);
+    if (n.pos.y < 0.05 || colliders.some(b => b.containsPoint(n.pos))) n.hit = true;
+    if (players) for (const p of H.players.values()) {
+      if (!p.alive || (p.id === n.from && n.t < 0.3)) continue;
+      if (Math.hypot(p.p[0] - n.pos.x, p.p[1] + 1 - n.pos.y, p.p[2] - n.pos.z) < 0.75) n.hit = true;
+    }
   }
 }
 function hostBreakWall(wall, cells, at, cracks) {
@@ -1719,16 +1898,18 @@ function hostBlast(at, from, { power = 1, radius = NADE.radius, w = 'grenade', n
   for (const wall of walls) {
     const rb = BLAST_HOLE[wall.type] * scale;
     const whole = wall.meshes[0].boundingBox ? wall.cellBox(0).union(wall.cellBox(wall.alive.length - 1)) : null;
-    if (whole && whole.distanceToPoint(at) > rb * 1.8) continue;
+    if (whole && whole.distanceToPoint(at) > rb * 2) continue;
     const rm = [], cracks = [];
     for (let c = 0; c < wall.alive.length; c++) {
       if (!wall.alive[c]) continue;
       const d = wall.cellCenter(c).distanceTo(at) - CELL * 0.35;
       const edge = rb * (0.75 + Math.random() * 0.5); // ragged hole, not a perfect circle
-      if (d < edge) rm.push(c);
-      else if (d < rb * 1.8) {
-        const amt = +(0.35 * (1 - (d - rb) / (rb * 0.8))).toFixed(2);
-        wall.hp[c] *= 0.5;
+      const full = wall.row(c) === wall.m ? WALL_HP.trim : WALL_HP[wall.type];
+      // already cracked masonry gives way much more easily to the next blast
+      if (d < edge || (d < rb * 2 && wall.hp[c] < full * 0.3)) rm.push(c);
+      else if (d < rb * 2) {
+        const amt = +(0.35 * (1 - (d - rb) / rb)).toFixed(2);
+        wall.hp[c] *= 0.25;
         if (amt > 0.05) cracks.push([c, amt]);
       }
     }
@@ -1852,7 +2033,8 @@ function synth(events) {
 function loadSounds() {
   const a = audio();
   for (const k in FOLEY) SND[k] = synth(FOLEY[k]);
-  for (const g of BUY) for (const v of [g, g + '_far']) fetch(`assets/snd/${v}.wav`).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+  // guns with their own recordings
+  for (const g of ['ak47','m4','shotgun','sniper','deagle','beretta']) for (const v of [g, g + '_far']) fetch(`assets/snd/${v}.wav`).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
     .then(b => a.decodeAudioData(b)).then(buf => { SND[v] = buf; }).catch(() => {});
   for (const [k, file] of [['boom_punch', 'boom_punch.flac'], ['boom_tail', 'boom_tail.ogg']]) fetch('assets/snd/' + file)
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => a.decodeAudioData(b)).then(buf => { SND[k] = buf; }).catch(() => {});
@@ -1868,10 +2050,17 @@ function playSample(name, vol = 1, dist = 0, rate = 1) {
   src.connect(f).connect(g).connect(a.destination); src.start();
   return true;
 }
+// guns without their own recording borrow a close relative at another pitch:
+// Uzi = 9 mm pistol fired fast, double-barrel = shotgun lower and louder, minigun = 7.62 rifle pitched up,
+// launcher / RPG = a deep shotgun "thump" plus a synthetic whoosh
+const SHOT_ALIAS = { uzi:['beretta', 1.08, 0.9], dbshotgun:['shotgun', 0.85, 1.25], minigun:['ak47', 1.18, 0.75], launcher:['shotgun', 0.55, 0.7], rpg:['shotgun', 0.5, 0.8] };
 function playShot(kind, vol = 1, dist = 0) {
   if (vol < 0.03 || MUTED) return;
-  const take = dist > 18 && SND[kind + '_far'] ? kind + '_far' : kind;
-  if (playSample(take, vol, dist * 0.5, kind === 'deagle' ? 0.86 : 1)) return; // .45 pitched down = heavier Deagle boom
+  if (kind === 'laser') return playLaser(vol, dist);
+  const [base, rate, gain] = SHOT_ALIAS[kind] || [kind, kind === 'deagle' ? 0.86 : 1, 1]; // .45 pitched down = heavier Deagle boom
+  const take = dist > 18 && SND[base + '_far'] ? base + '_far' : base;
+  if (kind === 'launcher' || kind === 'rpg') playWhoosh(vol * (kind === 'rpg' ? 1 : 0.5), kind === 'rpg' ? 1.2 : 0.5);
+  if (playSample(take, vol * gain, dist * 0.5, rate)) return;
   const a = audio(), src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
   src.buffer = noiseBuf; f.type = 'lowpass';
   f.frequency.value = kind === 'knife' ? 4000 : WEAPONS[kind]?.slot === 2 ? 2600 : 1500;
@@ -1879,6 +2068,41 @@ function playShot(kind, vol = 1, dist = 0) {
   g.gain.setValueAtTime((kind === 'knife' ? .15 : .55) * vol, a.currentTime);
   g.gain.exponentialRampToValueAtTime(.001, a.currentTime + len);
   src.connect(f).connect(g).connect(a.destination); src.start(); src.stop(a.currentTime + len + .02);
+}
+// laser: a bright descending "pew" with a buzzing tail
+function playLaser(vol, dist) {
+  const a = audio(), t = a.currentTime;
+  const f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 16000 / (1 + dist * 0.1);
+  f.connect(a.destination);
+  for (const [type, f0, f1, g0] of [['sawtooth', 2400, 300, 0.12], ['sine', 1200, 150, 0.2], ['square', 4800, 900, 0.03]]) {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.16);
+    g.gain.setValueAtTime(g0 * vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    o.connect(g).connect(f); o.start(t); o.stop(t + 0.22);
+  }
+}
+// rocket motor / launcher tube: filtered noise sweeping down
+function playWhoosh(vol, secs) {
+  if (MUTED || vol < 0.03) return;
+  const a = audio(), t = a.currentTime, s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  s.buffer = noiseBuf; s.loop = true; f.type = 'bandpass'; f.Q.value = 0.8;
+  f.frequency.setValueAtTime(3000, t); f.frequency.exponentialRampToValueAtTime(400, t + secs);
+  g.gain.setValueAtTime(0.5 * vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + secs);
+  s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t + secs + 0.05);
+}
+// minigun motor: a whine that rises with the barrel speed
+let motor = null;
+function minigunMotor(spin) {
+  if (MUTED) return;
+  if (spin <= 0.01) { if (motor) { motor.g.gain.value = 0; } return; }
+  const a = audio();
+  if (!motor) {
+    const o = a.createOscillator(), o2 = a.createOscillator(), g = a.createGain();
+    o.type = 'sawtooth'; o2.type = 'square'; o.connect(g); o2.connect(g); g.connect(a.destination); g.gain.value = 0;
+    o.start(); o2.start(); motor = { o, o2, g };
+  }
+  motor.o.frequency.value = 60 + spin * 190; motor.o2.frequency.value = 120 + spin * 380;
+  motor.g.gain.value = 0.03 * spin;
 }
 function beep(freq, dur, vol = .15, type = 'square') {
   if (MUTED) return;
@@ -2052,12 +2276,17 @@ function hostHandle(from, m) {
     p.nades--;
     hostThrow(from, m.o, m.v);
   }
+  else if (m.t === 'proj') {
+    if (!p.alive || !WEAPONS[m.w]?.proj) return;
+    p.w = m.w;
+    hostLaunch(from, m.w, m.o, m.v);
+  }
 }
 // src = where the damage came from (shooter, or the grenade blast) — bodies fall and limbs fly away from it
 function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
   const a = H.players.get(fromId), v = H.players.get(targetId);
   if (!a || !v || !v.alive || H.winLock) return;
-  if (a === v && w !== 'grenade') return;                 // only your own grenade can hurt you
+  if (a === v && !['grenade', 'launcher', 'rpg', 'jerrycan'].includes(w)) return; // only your own explosions can hurt you
   if (a !== v && a.team === v.team && !cfg.ff) return;
   // armour: vest protects body and arms, helmet the head; how much gets through depends on the gun
   const covered = part === 'head' ? v.helmet : part !== 'lleg' && part !== 'rleg';
@@ -2110,6 +2339,11 @@ function hostTick(dt) {
   for (const b of H.bots) botThink(b, dt);
   for (let i = hostNades.length - 1; i >= 0; i--) {
     const n = hostNades[i];
+    if (n.impact) {
+      stepProj(n, dt, true);
+      if (n.hit || n.t > 6) { hostNades.splice(i, 1); hostBlast(n.pos, n.from, { nid: n.nid, power: n.power, radius: n.radius, w: n.w }); }
+      continue;
+    }
     stepNade(n, dt);
     if (n.t >= NADE.fuse) { hostNades.splice(i, 1); hostBlast(n.pos, n.from, { nid: n.nid }); }
   }
@@ -2380,12 +2614,14 @@ function clientHandle(m) {
         worldFlash(muzzle);
         for (const p of m.es || [m.e]) {
           const e = new THREE.Vector3(...p), dir = e.clone().sub(o), len = dir.length();
-          tracer(muzzle, e);
-          // find what the bullet hit, to leave the right kind of hole there
+          WEAPONS[m.w]?.beam ? laserBeam(muzzle, e) : tracer(muzzle, e);
+          // find what the bullet hit (everything along the way for piercing guns), to leave the right holes there
           if (len > 0.01) {
             dir.normalize(); worldRay.set(o, dir); worldRay.far = len + 0.05;
-            const hit = worldRay.intersectObjects(worldMeshes, false)[0];
-            if (hit) impactAt(hit, m.w, dir);
+            for (const hit of worldRay.intersectObjects(worldMeshes, false)) {
+              impactAt(hit, m.w, dir);
+              if (!WEAPONS[m.w]?.pen || stopsBullets(hit)) break;
+            }
           }
         }
       }
@@ -2440,48 +2676,109 @@ function showCenter(html, secs) {
 
 // ================= input =================
 const canvas = renderer.domElement;
-function lock() { audio().resume(); canvas.requestPointerLock()?.catch?.(() => {}); } // a refused lock just leaves the pause menu up
-document.addEventListener('pointerlockchange', () => {
-  locked = document.pointerLockElement === canvas;
+// phones and tablets have no mouse to capture: "playing" is simply the pause menu being closed
+function lock() {
+  audio().resume();
+  if (IS_TOUCH) {
+    document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+    setPlaying(true);
+  } else canvas.requestPointerLock()?.catch?.(() => {}); // a refused lock just leaves the pause menu up
+}
+function setPlaying(on) {
+  locked = on;
   $('#pause').style.display = locked || !started || buyOpen || adminOpen ? 'none' : 'flex';
-  if (!locked) { me.firing = false; me.nadeHold = null; for (const k in keys) keys[k] = false; }
-});
+  if (!locked) { me.firing = false; me.nadeHold = null; for (const k in keys) keys[k] = false; touch.move.set(0, 0); }
+}
+document.addEventListener('pointerlockchange', () => setPlaying(document.pointerLockElement === canvas));
 $('#resume').onclick = lock;
 $('#copy').onclick = () => { $('#link').select(); navigator.clipboard?.writeText($('#link').value); $('#copy').textContent = 'Скопировано!'; setTimeout(() => $('#copy').textContent = 'Копировать', 1500); };
-addEventListener('mousemove', e => {
-  if (!locked) return;
-  const k = 0.0011 * sens * (me.zoom ? 0.3 : 1);
-  me.yaw -= e.movementX * k;
-  me.pitch = THREE.MathUtils.clamp(me.pitch - e.movementY * k, -1.5, 1.5);
-});
-addEventListener('mousedown', e => {
-  if (!locked) return;
-  if (e.button === 0) { me.firing = true; me.firedThisClick = false; }
-  if (e.button === 2 && WEAPONS[me.weapon].zoom && !me.reloadEnd) setZoom(!me.zoom);
+function look(dx, dy, k) {
+  k *= sens * (me.zoom ? 0.3 : 1);
+  me.yaw -= dx * k;
+  me.pitch = THREE.MathUtils.clamp(me.pitch - dy * k, -1.5, 1.5);
+}
+addEventListener('mousemove', e => { if (locked && !IS_TOUCH) look(e.movementX, e.movementY, 0.0011); });
+// trigger pressed / released — shared by the mouse buttons and the touch buttons (0 = fire, 2 = alternate)
+function pressTrigger(btn) {
+  if (btn === 0) { me.firing = true; me.firedThisClick = false; if (locked && me.alive) tryFire(); } // fire right away, so even a quick tap shoots
+  if (btn === 2 && WEAPONS[me.weapon].zoom && !me.reloadEnd) setZoom(!me.zoom);
   // grenade, like in CS2: pressing pulls the pin and winds up, releasing throws. Left = far, right = short lob
-  if ((e.button === 0 || e.button === 2) && me.weapon === 'grenade' && me.alive && me.nades > 0 && !me.nadeHold && nadeHideT <= 0) {
-    me.nadeHold = { btn: e.button, t: now() };
+  if ((btn === 0 || btn === 2) && me.weapon === 'grenade' && me.alive && me.nades > 0 && !me.nadeHold && nadeHideT <= 0) {
+    me.nadeHold = { btn, t: now() };
     playSample('pin', 0.6);
   }
-});
-addEventListener('contextmenu', e => e.preventDefault());
-addEventListener('mouseup', e => {
-  if (e.button === 0) me.firing = false;
-  if (me.nadeHold && e.button === me.nadeHold.btn) {
-    const lob = e.button === 2;
+}
+function releaseTrigger(btn) {
+  if (btn === 0) me.firing = false;
+  if (me.nadeHold && btn === me.nadeHold.btn) {
     me.nadeHold = null;
-    if (me.weapon === 'grenade') throwNade(lob);
+    if (me.weapon === 'grenade') throwNade(btn === 2);
   }
-});
-addEventListener('wheel', e => {
-  if (!locked) return;
+}
+function cycleWeapon(dir) {
   let s = WEAPONS[me.weapon].slot;
-  do s = (s + (e.deltaY > 0 ? 0 : 2)) % 4 + 1; while (!me.loadout[s]); // skip empty slots
+  do s = (s + (dir > 0 ? 0 : 2)) % 4 + 1; while (!me.loadout[s]); // skip empty slots
   selectSlot(s);
-});
+}
+addEventListener('mousedown', e => { if (locked && !IS_TOUCH) pressTrigger(e.button); });
+addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('mouseup', e => { if (!IS_TOUCH) releaseTrigger(e.button); });
+addEventListener('wheel', e => { if (locked) cycleWeapon(e.deltaY); });
+
+// ---- touch controls: floating joystick on the left, swipe on the right to look, buttons for everything else
+const touch = { move: new THREE.Vector2(), joy: null, look: null, fire: null, origin: new THREE.Vector2() };
+if (IS_TOUCH) {
+  document.body.classList.add('touch');
+  const layer = $('#touchLayer'), joyBase = $('#joyBase'), joyKnob = $('#joyKnob'), R = 55;
+  layer.addEventListener('pointerdown', e => {
+    if (!locked) return;
+    e.preventDefault();
+    if (e.clientX < innerWidth * 0.42 && touch.joy === null) {
+      touch.joy = e.pointerId; touch.origin.set(e.clientX, e.clientY);
+      joyBase.style.display = joyKnob.style.display = 'block';
+      joyBase.style.left = e.clientX + 'px'; joyBase.style.top = e.clientY + 'px';
+      joyKnob.style.left = e.clientX + 'px'; joyKnob.style.top = e.clientY + 'px';
+    } else if (touch.look === null) { touch.look = { id: e.pointerId, x: e.clientX, y: e.clientY }; }
+    layer.setPointerCapture(e.pointerId);
+  });
+  layer.addEventListener('pointermove', e => {
+    if (e.pointerId === touch.joy) {
+      const dx = e.clientX - touch.origin.x, dy = e.clientY - touch.origin.y, l = Math.hypot(dx, dy), k = l > R ? R / l : 1;
+      touch.move.set(dx * k / R, dy * k / R);
+      joyKnob.style.left = touch.origin.x + dx * k + 'px'; joyKnob.style.top = touch.origin.y + dy * k + 'px';
+    } else if (touch.look && e.pointerId === touch.look.id) {
+      look(e.clientX - touch.look.x, e.clientY - touch.look.y, 0.0045);
+      touch.look.x = e.clientX; touch.look.y = e.clientY;
+    }
+  });
+  const end = e => {
+    if (e.pointerId === touch.joy) { touch.joy = null; touch.move.set(0, 0); joyBase.style.display = joyKnob.style.display = 'none'; }
+    if (touch.look && e.pointerId === touch.look.id) touch.look = null;
+  };
+  layer.addEventListener('pointerup', end); layer.addEventListener('pointercancel', end);
+  // buttons: hold-able ones get press/release, the fire button also turns the view while you hold it
+  const hold = (id, down, up) => {
+    const b = $(id);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (!locked && id !== '#tPause') return; b.setPointerCapture(e.pointerId); b.classList.add('on'); b._last = { x: e.clientX, y: e.clientY }; down(); });
+    b.addEventListener('pointermove', e => { if (id === '#tFire' && b._last && locked) { look(e.clientX - b._last.x, e.clientY - b._last.y, 0.0045); b._last = { x: e.clientX, y: e.clientY }; } });
+    const lift = () => { if (!b._last) return; b._last = null; b.classList.remove('on'); up?.(); };
+    b.addEventListener('pointerup', lift); b.addEventListener('pointercancel', lift);
+  };
+  hold('#tFire', () => pressTrigger(0), () => releaseTrigger(0));
+  hold('#tJump', () => { keys.Space = true; }, () => { keys.Space = false; });
+  hold('#tReload', () => startReload());
+  hold('#tSwitch', () => cycleWeapon(1));
+  hold('#tNade', () => { if (me.nades > 0) selectSlot(4); });
+  hold('#tScope', () => pressTrigger(2), () => releaseTrigger(2));
+  hold('#tBuy', () => toggleBuy(true));
+  hold('#tScore', () => { showBoard = true; }, () => { showBoard = false; });
+  hold('#tPause', () => setPlaying(false));
+  // phones should be held sideways
+  const orient = () => { $('#rotate').style.display = innerHeight > innerWidth ? 'flex' : 'none'; };
+  addEventListener('resize', orient); orient();
+}
 // ---- buy menu (B), like in CS: the cursor appears, click or press the number
 let buyOpen = false;
-const BUY_KEYS = [...BUY, 'kevlar', 'helmet', 'grenade']; // 1..9; 0 = ammo for the gun in your hands
 function toggleBuy(open) {
   if (open && !me.alive) return;
   buyOpen = open;
@@ -2499,10 +2796,9 @@ function renderBuyMenu() {
   const ammoBtns = [1, 2].map(s => me.loadout[s]).filter(Boolean).map(g =>
     `<button data-item="ammo:${g}" ${!zone || me.money < cfg.ammoPrices[g] ? 'disabled' : ''}><b>${g === me.weapon ? 0 : ''}</b>Патроны ${WEAPONS[g].name} (+${WEAPONS[g].mag})<span class="price">$${cfg.ammoPrices[g]}</span></button>`).join('');
   $('#buyBody').innerHTML =
-    `<div class="buycol"><h3>Винтовки и дробовик</h3>${['ak47','m4','shotgun','sniper'].map((g, i) => btn(i + 1, g, P[g], me.loadout[1] === g)).join('')}</div>` +
-    `<div class="buycol"><h3>Пистолеты</h3>${['deagle','beretta'].map((g, i) => btn(i + 5, g, P[g], me.loadout[2] === g)).join('')}` +
-    `<h3 style="margin-top:12px">Снаряжение</h3>${btn(7, 'kevlar', P.kevlar, me.armor >= 100)}${btn(8, 'helmet', helmetPrice, me.armor >= 100 && me.helmet)}` +
-    `${btn(9, 'grenade', P.grenade, me.nades >= cfg.maxNades)}</div>` +
+    BUY_GROUPS.map(([title, list]) => `<div class="buycol"><h3>${title}</h3>${list.map(g => btn('', g, P[g], me.loadout[WEAPONS[g].slot] === g)).join('')}</div>`).join('') +
+    `<div class="buycol"><h3>Снаряжение</h3>${btn('', 'kevlar', P.kevlar, me.armor >= 100)}${btn('', 'helmet', helmetPrice, me.armor >= 100 && me.helmet)}` +
+    `${btn('', 'grenade', P.grenade, me.nades >= cfg.maxNades)}</div>` +
     `<div class="buycol"><h3>Патроны</h3>${ammoBtns || '<span class="muted">Нет оружия</span>'}</div>`;
   $('#buyMoney').textContent = '$' + me.money;
   document.querySelectorAll('#buyBody [data-item]').forEach(b => b.onclick = () => buy(b.dataset.item));
@@ -2516,7 +2812,6 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyB') { toggleBuy(!buyOpen); return; }
   const n = +e.code.replace('Digit', '');
   if (buyOpen) {
-    if (n >= 1 && n <= 9) buy(BUY_KEYS[n - 1]);
     if (e.code === 'Digit0' && cfg.ammoPrices[me.weapon] !== undefined) buy('ammo:' + me.weapon);
     if (e.code === 'Escape') toggleBuy(false);
     return;
@@ -2542,7 +2837,8 @@ function setZoom(on) {
   $('#scope').style.display = on ? 'block' : 'none';
   $('#cross').style.display = on ? 'none' : 'block';
 }
-const RELOAD_SND = { ak47:'reload_rifle', m4:'reload_rifle', shotgun:'pump', sniper:'bolt', deagle:'reload_pistol', beretta:'reload_pistol' };
+const RELOAD_SND = { ak47:'reload_rifle', m4:'reload_rifle', uzi:'reload_rifle', minigun:'reload_rifle', laser:'reload_pistol', launcher:'pump', rpg:'bolt',
+  shotgun:'pump', dbshotgun:'bolt', sniper:'bolt', deagle:'reload_pistol', beretta:'reload_pistol' };
 function startReload() {
   const w = WEAPONS[me.weapon];
   if (me.weapon === 'knife' || me.weapon === 'grenade' || me.reloadEnd || me.ammo[me.weapon] >= w.mag || !me.alive) return;
@@ -2558,6 +2854,7 @@ function tryFire() {
   if (!me.alive || me.reloadEnd || t - me.lastShot < w.rate) return;
   if (!w.auto && me.firedThisClick) return;
   if (me.weapon === 'grenade') return; // grenades are thrown when the button is released (see mouseup)
+  if (w.spin && me.spin < 1) return;    // minigun barrels still spinning up
   if (me.ammo[me.weapon] <= 0) { if (!playSample('empty', 0.5)) beep(900, .03, .06); startReload(); me.firedThisClick = true; return; }
   me.lastShot = t; me.firedThisClick = true;
   if (me.weapon !== 'knife') me.ammo[me.weapon]--;
@@ -2566,6 +2863,15 @@ function tryFire() {
   me.bloom = Math.min(me.bloom + w.bloom, 0.05);
   const origin = camera.getWorldPosition(new THREE.Vector3());
   const aim = new THREE.Vector3(); camera.getWorldDirection(aim);
+  const r2 = v => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
+  const muzzle = origin.clone().addScaledVector(aim, 0.6).add(new THREE.Vector3(0, -0.12, 0));
+  if (w.proj) {
+    // grenade launcher / RPG: launch a projectile; the host flies it and blows it up on impact
+    const v = aim.clone().multiplyScalar(w.proj.speed);
+    sendToHost({ t:'proj', w: me.weapon, o: r2(origin.clone().addScaledVector(aim, 0.8)), v: r2(v) });
+    muzzleFlash(w); me.pitch = Math.min(1.5, me.pitch + w.kick); vmKick = 0.05 + w.kick;
+    return; // the launch sound plays when the shell appears (for everyone at once)
+  }
   const targets = worldMeshes.slice();
   for (const r of remotes.values()) if (r.avatar && r.alive) targets.push(...r.avatar.userData.hitParts);
   const ends = [];
@@ -2574,18 +2880,23 @@ function tryFire() {
     const dir = aim.clone();
     dir.x += (Math.random()-.5) * spread * 2; dir.y += (Math.random()-.5) * spread * 2; dir.z += (Math.random()-.5) * spread * 2; dir.normalize();
     shootRay.set(origin, dir); shootRay.far = w.range;
-    const hit = shootRay.intersectObjects(targets, false)[0];
-    ends.push(hit ? hit.point : origin.clone().addScaledVector(dir, Math.min(w.range, 120)));
-    if (hit && hit.object.userData.pid) {
-      const r = remotes.get(hit.object.userData.pid);
-      if (r && (r.team !== myTeam || cfg.ff)) {
-        const part = hit.object.userData.part, head = part === 'head';
-        const f = w.pellets ? THREE.MathUtils.clamp(1.15 - hit.distance / 25, 0.25, 1) : 1;
-        const r2 = v => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
-        sendToHost({ t:'hit', target: r.id, part, w: me.weapon, f, pt: r2(hit.point), dir: r2(dir) });
-        hitAny = true; headAny ||= head;
+    // rifles and machine guns punch through walls and props and keep full damage; others stop at the first surface
+    let end = null;
+    for (const hit of shootRay.intersectObjects(targets, false)) {
+      if (hit.object.userData.pid) {
+        const r = remotes.get(hit.object.userData.pid);
+        if (r && (r.team !== myTeam || cfg.ff)) {
+          const part = hit.object.userData.part, head = part === 'head';
+          const f = w.pellets ? THREE.MathUtils.clamp(1.15 - hit.distance / 25, 0.25, 1) : 1;
+          sendToHost({ t:'hit', target: r.id, part, w: me.weapon, f, pt: r2(hit.point), dir: r2(dir) });
+          hitAny = true; headAny ||= head;
+        }
+        end = hit.point; break;
       }
-    } else if (hit) impactAt(hit, me.weapon, dir);
+      impactAt(hit, me.weapon, dir);
+      if (!w.pen || stopsBullets(hit)) { end = hit.point; break; }
+    }
+    ends.push(end || origin.clone().addScaledVector(dir, Math.min(w.range, 120)));
   }
   if (hitAny) {
     const hm = $('#hitmark'); hm.className = headAny ? 'head' : ''; hm.style.opacity = 1; setTimeout(() => hm.style.opacity = 0, 120);
@@ -2593,19 +2904,35 @@ function tryFire() {
   }
   if (me.weapon !== 'knife') {
     // tracers start a little ahead of the eye, under the crosshair, where the barrel would be
-    const muzzle = origin.clone().addScaledVector(aim, 0.6).add(new THREE.Vector3(0, -0.12, 0));
-    for (const e of ends) tracer(muzzle, e);
-    flash.position.copy(muzzles[me.weapon]); flash.material.rotation = Math.random() * 6.28; flash.visible = true;
-    flash.scale.setScalar(w.pellets || me.weapon === 'deagle' ? 0.32 : 0.22);
-    setTimeout(() => flash.visible = false, 40);
+    for (const e of ends) w.beam ? laserBeam(muzzle, e) : tracer(muzzle, e);
+    muzzleFlash(w);
     me.pitch = Math.min(1.5, me.pitch + w.kick);
   }
   vmKick = me.weapon === 'knife' ? 0.25 : 0.05 + w.kick;
   playShot(me.weapon, 0.8);
   if (me.weapon === 'shotgun') setTimeout(() => playSample('pump', 0.5), 350);
   if (me.weapon === 'sniper') { setTimeout(() => playSample('bolt', 0.5), 450); setZoom(false); }
-  const r2 = v => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
   sendToHost({ t:'shot', o: r2(origin), e: r2(ends[0]), es: ends.length > 1 ? ends.map(r2) : undefined, w: me.weapon });
+}
+// the ground and the map's outer border stop every bullet
+function stopsBullets(hit) { const ud = hit.object.userData || {}; return ud.mat === 'sand' || ud.border; }
+function muzzleFlash(w) {
+  flash.position.copy(muzzles[me.weapon]); flash.material.rotation = Math.random() * 6.28; flash.visible = true;
+  flash.material.color.set(w.beam ? new THREE.Color(0.5, 3, 4) : new THREE.Color(4, 3, 2));
+  flash.scale.setScalar(w.pellets || w.proj || me.weapon === 'deagle' ? 0.34 : 0.22);
+  setTimeout(() => flash.visible = false, 40);
+}
+// laser: a glowing beam for a split second
+const beamMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 4, 5), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+const beamGeo = new THREE.CylinderGeometry(0.012, 0.012, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+function laserBeam(from, to) {
+  const m = new THREE.Mesh(beamGeo, beamMat);
+  m.position.copy(from); m.lookAt(to); m.scale.set(1, 1, from.distanceTo(to));
+  scene.add(m);
+  fx.push({ objs:[m], t:0.07, life:0.07, keep:true });
+  const g = new THREE.Sprite(new THREE.SpriteMaterial({ map: FLASH_TEX, color: new THREE.Color(0.5, 3, 4), blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.position.copy(to); g.scale.setScalar(0.35); scene.add(g);
+  fx.push({ objs:[g], t:0.1, life:0.1 });
 }
 
 // ================= main loop =================
@@ -2632,7 +2959,7 @@ manager.onLoad = () => {
   const strip = (root, re) => root.children.filter(c => re.test(c.name)).forEach(c => root.remove(c));
   strip(MODELS.service_pistol, /_b$|magazine|bullet/);
   strip(MODELS.bolt_action_rifle_7_62, /bolt_b|bullet/);
-  prepareSoldier(); buildMap(); buildNav(); setupViewmodels(); loadSounds();
+  buildProceduralGuns(); prepareSoldier(); buildMap(); buildNav(); setupViewmodels(); loadSounds();
   $('#loadbar').style.width = '100%';
   $('#go').disabled = false;
   $('#go').textContent = joinCode ? 'Присоединиться к игре' : 'Создать игру';
@@ -2672,9 +2999,10 @@ function frame() {
       let fx = 0, fz = 0;
       if (locked) {
         if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
+        fx += touch.move.x; fz += touch.move.y; // joystick: pushing it a little walks, all the way runs
       }
-      const len = Math.hypot(fx, fz) || 1;
-      const speed = (keys.ShiftLeft ? WALK : RUN) * (me.weapon === 'knife' ? 1.15 : 1);
+      const len = Math.hypot(fx, fz) || 1, push = Math.min(1, len);
+      const speed = (keys.ShiftLeft ? WALK : RUN) * push * (me.weapon === 'knife' ? 1.15 : WEAPONS[me.weapon].heavy || 1);
       const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
       const wx = (fx * cos + fz * sin) / len * speed, wz = (-fx * sin + fz * cos) / len * speed;
       const accel = me.onGround ? 14 : 3;
@@ -2683,6 +3011,10 @@ function frame() {
       if (locked && keys.Space && me.onGround) { me.vel.y = JUMP; me.onGround = false; }
       me.vel.y -= GRAVITY * dt;
       me.onGround = moveBody(me.pos, me.vel, dt);
+      // minigun: holding fire spins the barrels up, only then it shoots
+      const wq = WEAPONS[me.weapon];
+      me.spin = wq.spin ? THREE.MathUtils.clamp((me.spin || 0) + (me.firing ? dt / wq.spin : -dt * 1.2), 0, 1) : 0;
+      minigunMotor(me.spin);
       if (me.firing) tryFire();
       if (me.reloadEnd && t >= me.reloadEnd) {
         // move bullets from the spare ammo into the magazine (endless if the admin turned that on)
@@ -2704,6 +3036,8 @@ function frame() {
 
     // viewmodel: sway, recoil, reload dip, weapon draw
     nadeHideT = Math.max(0, nadeHideT - dt);
+    const spinning = vmModels.minigun?.getObjectByName('barrels');
+    if (spinning) spinning.rotation.x += (me.spin || 0) * dt * 45;
     for (const k in vmModels) vmModels[k].visible = me.alive && k === me.weapon && !me.zoom && !(k === 'grenade' && nadeHideT > 0);
     vmKick = Math.max(0, vmKick - dt * 0.5);
     drawT = Math.max(0, drawT - dt);
@@ -2770,7 +3104,15 @@ function frame() {
     $('#money').textContent = '$' + me.money;
     $('#arm').style.display = me.armor > 0 ? 'flex' : 'none';
     $('#armv').textContent = me.armor; $('#helm').style.display = me.helmet ? 'inline' : 'none';
-    $('#buyhint').style.display = me.alive && !buyOpen && inBuyZone(myTeam, [me.pos.x, me.pos.y, me.pos.z]) ? 'block' : 'none';
+    const inZone = me.alive && !buyOpen && inBuyZone(myTeam, [me.pos.x, me.pos.y, me.pos.z]);
+    $('#buyhint').style.display = inZone && !IS_TOUCH ? 'block' : 'none';
+    if (IS_TOUCH) { // show only the buttons that make sense right now
+      $('#tBuy').style.display = inZone ? 'flex' : 'none';
+      $('#tScope').style.display = WEAPONS[me.weapon].zoom ? 'flex' : 'none';
+      $('#tNade').style.display = me.nades > 0 && me.weapon !== 'grenade' ? 'flex' : 'none';
+      $('#tReload').style.display = WEAPONS[me.weapon].mag !== Infinity ? 'flex' : 'none';
+      $('#tFire').textContent = me.weapon === 'grenade' ? '💣' : me.weapon === 'knife' ? '🔪' : '🎯';
+    }
     if (buyOpen) { const m = '$' + me.money; if ($('#buyMoney').textContent !== m) renderBuyMenu(); }
     $('#sct').textContent = teamScore.ct; $('#st').textContent = teamScore.t;
     $('#board').style.display = showBoard ? 'block' : 'none';
@@ -2797,7 +3139,7 @@ function frame() {
     const f = fx[i];
     f.t -= dt;
     if (f.grow) for (const o of f.objs) { o.scale.multiplyScalar(1 + f.grow * dt * 3); o.material.opacity = Math.max(0, f.t / f.life); }
-    if (f.t <= 0) { for (const o of f.objs) { scene.remove(o); if (o.isLine) o.geometry.dispose(); else o.material.dispose(); } fx.splice(i, 1); }
+    if (f.t <= 0) { for (const o of f.objs) { scene.remove(o); if (f.keep) continue; if (o.isLine) o.geometry.dispose(); else o.material.dispose(); } fx.splice(i, 1); }
   }
 
   if (quality === 0) {
