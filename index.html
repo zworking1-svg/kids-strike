@@ -60,6 +60,8 @@
   #feed .me { border-color:#d23; }
   .n-ct { color:#8ab8ff; } .n-t { color:#f2c06e; }
   #flash { position:absolute; inset:0; background:radial-gradient(circle, #fff8e0, #ffd9a0 60%, #ffb060); opacity:0; mix-blend-mode:screen; }
+  #pickhint { position:absolute; left:50%; top:64%; transform:translateX(-50%); font-size:19px; font-weight:700; color:#fff; background:rgba(0,0,0,.5); padding:4px 14px; display:none; }
+  #tPick { left:50%; transform:translateX(-50%); bottom:24px; display:none; }
   #nadehint { position:absolute; left:50%; top:58%; transform:translateX(-50%); font-size:18px; font-weight:700; color:#ffd27a; display:none; }
   #nades { font-size:16px; color:#cfd6df; font-weight:600; }
   #dmg { position:absolute; inset:0; box-shadow:inset 0 0 160px rgba(200,0,0,.8); opacity:0; transition:opacity .35s; }
@@ -94,6 +96,7 @@
   #tReload { right:calc(122px + env(safe-area-inset-right)); bottom:118px; width:50px; height:50px; }
   #tSwitch { right:calc(194px + env(safe-area-inset-right)); bottom:40px; width:52px; height:52px; }
   #tNade { right:calc(32px + env(safe-area-inset-right)); bottom:196px; width:50px; height:50px; }
+  #tCrouch { right:calc(194px + env(safe-area-inset-right)); bottom:112px; width:50px; height:50px; } .tb.lock { background:rgba(232,163,61,.55); }
   #tScope { right:calc(108px + env(safe-area-inset-right)); bottom:186px; width:50px; height:50px; }
   #tBuy { left:calc(14px + env(safe-area-inset-left)); top:112px; display:none; }
   #tPause { left:calc(10px + env(safe-area-inset-left)); top:8px; width:42px; height:42px; font-size:18px; }
@@ -204,9 +207,10 @@
     <input id="sens" type="range" min="0.5" max="4" step="0.1" value="1.6" style="width:100%">
     <button class="main" id="resume">Играть</button>
     <div class="keys">
-      <b>W A S D</b> бег &nbsp; <b>Пробел</b> прыжок &nbsp; <b>Shift</b> шаг<br>
+      <b>W A S D</b> бег &nbsp; <b>Пробел</b> прыжок &nbsp; <b>Shift</b> шаг &nbsp; <b>Ctrl</b> или <b>C</b> присесть<br>
       <b>ЛКМ</b> огонь &nbsp; <b>ПКМ</b> прицел снайперки &nbsp; <b>R</b> перезарядка<br>
-      <b>1</b> основное <b>2</b> пистолет <b>3</b> нож <b>4</b> граната &nbsp; <b>B</b> магазин (на своей базе)<br>
+      <b>1</b> нож <b>2</b> пистолет <b>3</b> ПП/дробовик <b>4</b> автомат <b>5</b> пулемёт <b>6</b> лазер <b>7</b> граната <b>8</b> РПГ <b>9</b> винтовка<br>
+      <b>E</b> подобрать оружие &nbsp; <b>B</b> магазин (на своей базе)<br>
       Граната: зажми <b>ЛКМ</b> и отпусти — бросок далеко, <b>ПКМ</b> — под ноги<br>
       <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Деньги: убийство +$500, в голову +$1000, смерть — штраф.
     </div>
@@ -231,7 +235,9 @@
     <div class="tb" id="tSwitch">⇄</div>
     <div class="tb" id="tNade">💣</div>
     <div class="tb" id="tScope">🔭</div>
+    <div class="tb" id="tCrouch">⤓</div>
     <div class="tb wide" id="tBuy">$ Магазин</div>
+    <div class="tb wide" id="tPick">✋ Подобрать</div>
   </div>
   <div id="roomtag"></div>
   <div id="fps"></div>
@@ -245,6 +251,7 @@
   <div id="money">$0</div>
   <div id="moneypops"></div>
   <div id="buyhint">B — магазин</div>
+  <div id="pickhint"></div>
   <div id="nadehint">Чека выдернута — отпусти кнопку, чтобы бросить</div>
   <div id="hp"><span class="plus">✚</span><span id="hpv">100</span><div class="meter"><div id="hpbar" style="width:100%"></div></div>
     <span id="arm"><span class="shield">⛉</span><span id="armv">0</span><span id="helm">⛑</span></span></div>
@@ -279,49 +286,62 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 // pen = bullets go straight through walls and props and still hit with full damage behind them (rifles, machine guns, laser)
 // proj = fires an explosive projectile instead of a bullet; spin = barrels must spin up first; heavy = slows you down
 const WEAPONS = {
-  ak47:    { name:'AK-47',        slot:1, dmg:36, head:4, rate:0.1,  mag:30, reserve:90,  auto:true,  spread:0.012, bloom:0.008, reload:2.4, range:200, kick:0.014, ap:0.775, pen:true },
-  m4:      { name:'M4A1',         slot:1, dmg:31, head:4, rate:0.09, mag:30, reserve:90,  auto:true,  spread:0.009, bloom:0.006, reload:2.2, range:200, kick:0.010, ap:0.7, pen:true },
-  uzi:     { name:'Uzi',          slot:1, dmg:22, head:3, rate:0.065,mag:32, reserve:128, auto:true,  spread:0.016, bloom:0.007, reload:2.0, range:120, kick:0.009, ap:0.55 },
-  shotgun: { name:'Дробовик',     slot:1, dmg:16, head:2, rate:0.85, mag:8,  reserve:32,  auto:false, spread:0.055, bloom:0,     reload:2.6, range:45,  kick:0.045, ap:0.5, pellets:9 },
-  dbshotgun:{ name:'Двустволка',  slot:1, dmg:15, head:2, rate:0.25, mag:2,  reserve:24,  auto:false, spread:0.075, bloom:0,     reload:2.4, range:35,  kick:0.08,  ap:0.5, pellets:14 },
-  sniper:  { name:'Снайперка',    slot:1, dmg:95, head:2, rate:1.3,  mag:5,  reserve:30,  auto:false, spread:0.035, bloom:0,     reload:3.0, range:300, kick:0.03,  ap:0.975, zoom:true, pen:true },
-  laser:   { name:'Лазерная винтовка', slot:1, dmg:34, head:3, rate:0.14, mag:40, reserve:120, auto:true, spread:0.002, bloom:0, reload:2.5, range:300, kick:0.004, ap:1, pen:true, beam:true },
-  minigun: { name:'Миниган',      slot:1, dmg:24, head:3, rate:0.04, mag:200,reserve:400, auto:true,  spread:0.02,  bloom:0.003, reload:4.5, range:200, kick:0.004, ap:0.8, pen:true, spin:0.6, heavy:0.7 },
-  launcher:{ name:'Гранатомёт',   slot:1, dmg:0,  head:1, rate:0.9,  mag:6,  reserve:12,  auto:false, spread:0.004, bloom:0,     reload:3.5, range:0,   kick:0.06,  ap:0.5, proj:{ speed:26, gravity:12, power:0.8, radius:7, model:'nade' } },
-  rpg:     { name:'РПГ',          slot:1, dmg:0,  head:1, rate:1.2,  mag:1,  reserve:4,   auto:false, spread:0.002, bloom:0,     reload:3.0, range:0,   kick:0.08,  ap:0.5, heavy:0.85, proj:{ speed:42, gravity:1.5, power:1.4, radius:9, model:'rocket' } },
+  ak47:    { name:'AK-47',        slot:4, dmg:36, head:4, rate:0.1,  mag:30, reserve:90,  auto:true,  spread:0.012, bloom:0.008, reload:2.4, range:200, kick:0.014, ap:0.775, pen:true },
+  m4:      { name:'M4A1',         slot:4, dmg:31, head:4, rate:0.09, mag:30, reserve:90,  auto:true,  spread:0.009, bloom:0.006, reload:2.2, range:200, kick:0.010, ap:0.7, pen:true },
+  uzi:     { name:'Uzi',          slot:3, dmg:22, head:3, rate:0.065,mag:32, reserve:128, auto:true,  spread:0.016, bloom:0.007, reload:2.0, range:120, kick:0.009, ap:0.55 },
+  shotgun: { name:'Дробовик',     slot:3, dmg:16, head:2, rate:0.85, mag:8,  reserve:32,  auto:false, spread:0.055, bloom:0,     reload:2.6, range:45,  kick:0.045, ap:0.5, pellets:9 },
+  dbshotgun:{ name:'Двустволка',  slot:3, dmg:15, head:2, rate:0.25, mag:2,  reserve:24,  auto:false, spread:0.075, bloom:0,     reload:2.4, range:35,  kick:0.08,  ap:0.5, pellets:14 },
+  // the house special: brutal scoped rifle that fires fast and reloads in a second
+  zhangomet:{ name:'Жангомет',    slot:9, dmg:45, head:3, rate:0.08, mag:40, reserve:160, auto:true,  spread:0.006, bloom:0.003, reload:1.0, range:300, kick:0.007, ap:0.9, zoom:true, pen:true },
+  sniper:  { name:'Снайперка',    slot:9, dmg:95, head:2, rate:1.3,  mag:5,  reserve:30,  auto:false, spread:0.035, bloom:0,     reload:3.0, range:300, kick:0.03,  ap:0.975, zoom:true, pen:true },
+  laser:   { name:'Лазерная винтовка', slot:6, dmg:34, head:3, rate:0.14, mag:40, reserve:120, auto:true, spread:0.002, bloom:0, reload:2.5, range:300, kick:0.004, ap:1, pen:true, beam:true },
+  minigun: { name:'Миниган',      slot:5, dmg:24, head:3, rate:0.04, mag:200,reserve:400, auto:true,  spread:0.02,  bloom:0.003, reload:4.5, range:200, kick:0.004, ap:0.8, pen:true, spin:0.6, heavy:0.7 },
+  launcher:{ name:'Гранатомёт',   slot:8, dmg:0,  head:1, rate:0.9,  mag:6,  reserve:12,  auto:false, spread:0.004, bloom:0,     reload:3.5, range:0,   kick:0.06,  ap:0.5, proj:{ speed:26, gravity:12, power:0.8, radius:7, model:'nade' } },
+  rpg:     { name:'РПГ',          slot:8, dmg:0,  head:1, rate:1.2,  mag:1,  reserve:4,   auto:false, spread:0.002, bloom:0,     reload:3.0, range:0,   kick:0.08,  ap:0.5, heavy:0.85, proj:{ speed:42, gravity:1.5, power:1.4, radius:9, model:'rocket' } },
   deagle:  { name:'Desert Eagle', slot:2, dmg:52, head:4, rate:0.35, mag:7,  reserve:35,  auto:false, spread:0.008, bloom:0.03,  reload:2.0, range:200, kick:0.05,  ap:0.93 },
   beretta: { name:'Beretta',      slot:2, dmg:24, head:4, rate:0.14, mag:15, reserve:120, auto:false, spread:0.006, bloom:0.01,  reload:1.6, range:200, kick:0.015, ap:0.5 },
-  knife:   { name:'Нож',          slot:3, dmg:55, head:1, rate:0.45, mag:Infinity, reserve:0, auto:true, spread:0, bloom:0, reload:0, range:2.3, kick:0, ap:0.85 },
-  grenade: { name:'Граната',      slot:4, dmg:0,  head:1, rate:0.8,  mag:Infinity, reserve:0, auto:false, spread:0, bloom:0, reload:0, range:0, kick:0, ap:0.5 },
+  knife:   { name:'Нож',          slot:1, dmg:55, head:1, rate:0.45, mag:Infinity, reserve:0, auto:true, spread:0, bloom:0, reload:0, range:2.3, kick:0, ap:0.85 },
+  grenade: { name:'Граната',      slot:7, dmg:0,  head:1, rate:0.8,  mag:Infinity, reserve:0, auto:false, spread:0, bloom:0, reload:0, range:0, kick:0, ap:0.5 },
 };
 // the blast kills within ~2 m, badly hurts at 4–5 m and still scratches at 8 m
 const NADE = { fuse: 1.6, radius: 9, maxDmg: 165, throwSpeed: 15, lobSpeed: 7 };
-const BUY = ['ak47','m4','uzi','shotgun','dbshotgun','sniper','laser','minigun','launcher','rpg','deagle','beretta'];
-// shop sections
-const BUY_GROUPS = [
-  ['Пистолеты', ['deagle','beretta']],
-  ['Пистолеты-пулемёты и дробовики', ['uzi','shotgun','dbshotgun']],
-  ['Винтовки', ['ak47','m4','sniper','laser']],
-  ['Тяжёлое оружие', ['minigun','launcher','rpg']],
-];
+const BUY = ['ak47','m4','uzi','shotgun','dbshotgun','sniper','zhangomet','laser','minigun','launcher','rpg','deagle','beretta'];
+// you carry one weapon per slot, up to 9 at once; keys 1–9 pick the slot
+const SLOT_NAME = { 1:'Нож', 2:'Пистолеты', 3:'Пистолеты-пулемёты и дробовики', 4:'Автоматы', 5:'Пулемёты', 6:'Лазерное оружие', 7:'Гранаты', 8:'РПГ и гранатомёты', 9:'Винтовки' };
+const BUY_GROUPS = [2, 3, 4, 5, 6, 8, 9].map(s => [s + ' · ' + SLOT_NAME[s], BUY.filter(k => WEAPONS[k].slot === s)]);
+const MAIN_SLOTS = [9, 8, 6, 5, 4, 3]; // "main" weapons: the one you hold after respawn, the one that drops when you die
 const START_PISTOL = 'beretta';      // everyone spawns with it, like the free pistol in CS
 const DEFAULT_GUN = { t:'ak47', ct:'m4' }; // what bots carry
-const ITEM_NAME = { ...Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) => [k, w.name])), kevlar:'Бронежилет', helmet:'Бронежилет + шлем' };
+const DEFAULT_NAMES = Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) => [k, w.name]));
+const ITEM_NAME = { ...DEFAULT_NAMES, kevlar:'Бронежилет', helmet:'Бронежилет + шлем' };
+// the admin can rename any weapon; everybody sees the new names
+function applyNames() {
+  for (const k in WEAPONS) WEAPONS[k].name = ITEM_NAME[k] = (cfg.names?.[k] || '').trim() || DEFAULT_NAMES[k];
+}
+// damage per hit (out of 100 health); for explosives it is the damage right at the centre of the blast
+const BLAST_DMG = { grenade: 165, launcher: 132, rpg: 231, jerrycan: 82 };
+const DEFAULT_DMG = { ...Object.fromEntries(Object.entries(WEAPONS).filter(([k]) => !BLAST_DMG[k] || k === 'grenade').map(([k, w]) => [k, w.dmg])), ...BLAST_DMG };
+function weaponDmg(w) { return cfg.dmg?.[w] ?? DEFAULT_DMG[w] ?? WEAPONS[w]?.dmg ?? 20; }
 // the creator of the game can change all of these in the admin panel
 const DEFAULT_CFG = {
   startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
   winKills:25, respawn:3, ff:false, buyAnywhere:false, infAmmo:false, loseWeapons:true,
   blood:true, gore:true, botLevel:1, maxNades:1, nadePower:100, map:'dust',
-  prices: { ak47:2700, m4:2900, uzi:1200, shotgun:1050, dbshotgun:1400, sniper:4750, laser:4500, minigun:7000, launcher:5000, rpg:6500,
+  jump: 1.3,          // jump height in metres
+  prices: { ak47:2700, m4:2900, uzi:1200, shotgun:1050, dbshotgun:1400, sniper:4750, zhangomet:8000, laser:4500, minigun:7000, launcher:5000, rpg:6500,
     deagle:700, beretta:300, kevlar:650, helmet:1000, grenade:300 },
-  ammoPrices: { ak47:80, m4:80, uzi:50, shotgun:65, dbshotgun:50, sniper:125, laser:150, minigun:300, launcher:400, rpg:800, deagle:40, beretta:30 },
+  ammoPrices: { ak47:80, m4:80, uzi:50, shotgun:65, dbshotgun:50, sniper:125, zhangomet:200, laser:150, minigun:300, launcher:400, rpg:800, deagle:40, beretta:30 },
+  dmg: {},            // filled below with every weapon's default damage
+  names: {},          // weapon renames, empty = default name
 };
+DEFAULT_CFG.dmg = { ...DEFAULT_DMG };
 let cfg = structuredClone(DEFAULT_CFG);
 const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
 const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
-const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3;
-const PEER_PREFIX = 'kidstrike-v7-'; // bump when the network messages change, so old tabs can't join new games
+const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3, CROUCH_EYE = 1.0;
+const jumpSpeed = () => Math.sqrt(2 * GRAVITY * Math.max(0.2, cfg.jump || 1.3)); // speed needed to rise exactly cfg.jump metres
+const PEER_PREFIX = 'kidstrike-v8-'; // bump when the network messages change, so old tabs can't join new games
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
 
 const $ = s => document.querySelector(s);
@@ -448,6 +468,37 @@ for (const name of ['wooden_crate_02','wooden_military_crate','barrel_03','metal
   gltfLoader.load(`assets/models/${name}/${name}.gltf`, g => { MODELS[name] = g.scene; });
 }
 gltfLoader.load('assets/models/Soldier.glb', g => { MODELS.soldier = g; });
+// "Жангомет": a chunky CC0 sci-fi rifle by Quaternius, repainted brutal — dark gunmetal, red-hot glowing inserts —
+// with a sniper scope on top and a heavy muzzle brake added
+gltfLoader.load('assets/models/zhangomet.glb', g => { MODELS.zhangomet = brutalRifle(g.scene); });
+function brutalRifle(src) {
+  const steel = new THREE.MeshStandardMaterial({ color: 0x24272c, roughness: 0.3, metalness: 0.95 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x121316, roughness: 0.45, metalness: 0.8 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x08080a, roughness: 0.6, metalness: 0.3 });
+  const hot = new THREE.MeshStandardMaterial({ color: 0x400804, emissive: 0xff2200, emissiveIntensity: 2.2, roughness: 0.4 });
+  src.traverse(o => {
+    if (!o.isMesh) return;
+    const n = o.material?.name || '';
+    o.material = /main/i.test(n) ? hot : /white/i.test(n) ? steel : /grey/i.test(n) ? dark : black;
+  });
+  const g = new THREE.Group(); g.add(src);
+  g.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3());
+  if (size.z > size.x) { src.rotation.y += Math.PI / 2; g.updateMatrixWorld(true); box = new THREE.Box3().setFromObject(g); size = box.getSize(new THREE.Vector3()); }
+  const c = box.getCenter(new THREE.Vector3()), L = size.x, H = size.y;
+  const M = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  // scope: tube, two bells, glowing red lens, mounts
+  const r = H * 0.1, sy = box.max.y + r * 1.1;
+  M(new THREE.CylinderGeometry(r, r, L * 0.42, 16).rotateZ(Math.PI / 2), black, c.x, sy, c.z);
+  M(new THREE.CylinderGeometry(r * 1.35, r, L * 0.08, 16).rotateZ(Math.PI / 2), black, c.x + L * 0.23, sy, c.z);
+  M(new THREE.CylinderGeometry(r, r * 1.25, L * 0.07, 16).rotateZ(Math.PI / 2), black, c.x - L * 0.22, sy, c.z);
+  M(new THREE.CircleGeometry(r * 1.2, 16).rotateY(Math.PI / 2), hot, c.x + L * 0.272, sy, c.z);
+  for (const dx of [-0.1, 0.1]) M(new THREE.BoxGeometry(L * 0.04, r * 1.4, r * 1.2), dark, c.x + dx * L, box.max.y + r * 0.2, c.z);
+  // muzzle brake with vents
+  M(new THREE.BoxGeometry(L * 0.1, H * 0.22, size.z * 0.7), steel, box.max.x + L * 0.04, c.y + H * 0.12, c.z);
+  for (const dx of [0.02, 0.06]) M(new THREE.BoxGeometry(L * 0.012, H * 0.24, size.z * 0.75), hot, box.max.x + L * dx, c.y + H * 0.12, c.z);
+  return g;
+}
 
 // low-poly CC0 guns get real metal / wood / polymer materials so they shine like the rest of the map
 const GUN_MAT = {
@@ -614,9 +665,9 @@ const CELL = 0.5;                                                          // wa
 const WALL_HP = { wall: 260, blue: 240, outer: 420, low: 380, trim: 220, mansion: 250, inner: 170, brick: 400 }; // what a block takes before it breaks
 const BLAST_HOLE = { wall: 2.7, blue: 2.7, outer: 2.0, low: 2.3, mansion: 2.7, inner: 3.1, brick: 2.1 }; // hole radius from a grenade, metres (~3 grenades level a whole wall)
 // bullet power against walls: bigger calibre chips more and breaks through sooner
-const PEN = { beretta: 14, uzi: 18, m4: 28, ak47: 38, deagle: 55, sniper: 140, shotgun: 8, dbshotgun: 9, laser: 45, minigun: 30, knife: 0 };
+const PEN = { beretta: 14, uzi: 18, m4: 28, ak47: 38, deagle: 55, sniper: 140, zhangomet: 60, shotgun: 8, dbshotgun: 9, laser: 45, minigun: 30, knife: 0 };
 // bullet hole size in metres: 9 mm < 5.56 < 7.62 < .50 AE < sniper round
-const HOLE = { beretta: 0.045, uzi: 0.045, m4: 0.055, ak47: 0.07, minigun: 0.07, deagle: 0.085, sniper: 0.11, shotgun: 0.035, dbshotgun: 0.035, laser: 0.05 };
+const HOLE = { beretta: 0.045, uzi: 0.045, m4: 0.055, ak47: 0.07, minigun: 0.07, deagle: 0.085, sniper: 0.11, zhangomet: 0.08, shotgun: 0.035, dbshotgun: 0.035, laser: 0.05 };
 
 const walls = [];
 class Wall {
@@ -807,7 +858,7 @@ function buildMap() {
     const m = new THREE.Mesh(boxGeo(w, D.borderH, d, 3), getMat(D.border));
     m.position.set(x, D.borderH / 2, z); m.castShadow = m.receiveShadow = true; m.userData = { mat: 'stone', border: true };
     scene.add(m); worldMeshes.push(m); mapObjects.push(m);
-    addCollider(m);
+    addCollider(m).max.y = 500; // invisible above the top: even with a huge jump nobody leaves the map
   }
   D.walls.forEach((def, i) => walls.push(new Wall(i, def)));
   // floors laid on the ground: parquet inside the villa, stone paths outside (they stop bullets like the ground)
@@ -891,6 +942,7 @@ function mansionProps(place) {
 }
 // throws the current map away: walls, props, floors, rubble, decals
 function clearMap() {
+  for (const did of [...dropMeshes.keys()]) removeDrop(did);
   for (const o of mapObjects) scene.remove(o);
   mapObjects.length = 0;
   for (const w of walls) { for (const im of w.meshes) if (im) scene.remove(im); for (const list of w.decals.values()) for (const d of list) scene.remove(d); }
@@ -976,9 +1028,9 @@ function prepareSoldier() {
   soldierScale = 1.8 / (box.max.y - box.min.y);
 }
 // every gun model is normalised the same way: centred, muzzle along +X, real-world length in metres
-const GUN_SRC = { ak47:'ak47', m4:'m4', shotgun:'shotgun', sniper:'bolt_action_rifle_7_62', deagle:'deagle', beretta:'service_pistol',
+const GUN_SRC = { ak47:'ak47', m4:'m4', shotgun:'shotgun', sniper:'bolt_action_rifle_7_62', zhangomet:'zhangomet', deagle:'deagle', beretta:'service_pistol',
   uzi:'uzi', dbshotgun:'dbshotgun', laser:'proc_laser', minigun:'proc_minigun', launcher:'proc_launcher', rpg:'proc_rpg' };
-const GUN_LEN = { ak47:0.88, m4:0.84, shotgun:1.0, sniper:1.15, deagle:0.27, beretta:0.22, uzi:0.45, dbshotgun:0.8, laser:0.95, minigun:1.0, launcher:0.8, rpg:1.1 };
+const GUN_LEN = { ak47:0.88, m4:0.84, shotgun:1.0, sniper:1.15, zhangomet:1.1, deagle:0.27, beretta:0.22, uzi:0.45, dbshotgun:0.8, laser:0.95, minigun:1.0, launcher:0.8, rpg:1.1 };
 // guns nobody gives away for free are built here from simple parts, muzzle along +X like the downloaded ones
 function buildProceduralGuns() {
   const M = (geo, mat, x = 0, y = 0, z = 0, rz = 0, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.z = rz; m.rotation.x = rx; return m; };
@@ -1100,6 +1152,7 @@ const VM_POSE = {
   m4:      [0.17, -0.2,  -0.68, 0.08],
   shotgun: [0.17, -0.21, -0.76, 0.08],
   sniper:  [0.17, -0.19, -0.83, 0.08],
+  zhangomet:[0.19, -0.25, -1.0, 0.06],
   uzi:     [0.16, -0.17, -0.6,  0.08],
   dbshotgun:[0.16, -0.2, -0.7,  0.08],
   laser:   [0.17, -0.2,  -0.9,  0.07],
@@ -1414,7 +1467,7 @@ function throwNade(lob) {
   sendToHost({ t:'nade', o: [r2(o.x), r2(o.y), r2(o.z)], v: [r2(v.x), r2(v.y), r2(v.z)] });
   me.nades--; nadeHideT = 0.6;
   playSample('throw', 0.6);
-  setTimeout(() => { if (me.nades <= 0 && me.weapon === 'grenade') { me.loadout[4] = null; selectSlot(me.loadout[1] ? 1 : 2); } }, 450);
+  setTimeout(() => { if (me.nades <= 0 && me.weapon === 'grenade') { me.loadout[7] = null; switchWeapon(bestWeapon()); } }, 450);
 }
 
 // ---- the explosion: flash, fireball, sparks, flying dirt, shock wave, smoke column, scorch mark, shake and sound
@@ -1600,6 +1653,50 @@ function playClink(vol, dist) {
     g.gain.setValueAtTime(vol * 0.12, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
     o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + 0.2);
   }
+}
+
+// ================= weapons lying on the ground =================
+// a dead player's main weapon: it slowly spins with a glow under it. Walk over it to pick it up into an empty slot,
+// or press E (the hand button on a phone) to swap it for the weapon you carry in that slot.
+const dropMeshes = new Map();
+const DROP_GLOW = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.1, 0.4), transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending });
+function spawnDrop(did, w, p) {
+  if (dropMeshes.has(did) || !WEAPONS[w] || !MODELS[GUN_SRC[w]]) return;
+  const g = new THREE.Group();
+  const gun = gunModel(w); gun.rotation.z = 0.15; g.add(gun);
+  const ring = new THREE.Mesh(new THREE.CircleGeometry(0.55, 24), DROP_GLOW); ring.rotation.x = -Math.PI / 2; ring.position.y = -0.17;
+  g.add(ring);
+  g.position.set(p[0], 0.2, p[2]); g.rotation.y = Math.random() * 6.28;
+  scene.add(g);
+  dropMeshes.set(did, { g, w, p, asked: 0, phase: Math.random() * 6 });
+}
+function removeDrop(did) { const d = dropMeshes.get(did); if (d) { scene.remove(d.g); dropMeshes.delete(did); } }
+function nearestDrop() {
+  let best = null, bd = 1.6;
+  for (const [did, d] of dropMeshes) { const dist = Math.hypot(d.p[0] - me.pos.x, d.p[2] - me.pos.z); if (dist < bd) { bd = dist; best = { did, ...d }; } }
+  return best;
+}
+function pickUp(swap) {
+  if (!me.alive || gamePaused) return;
+  const d = nearestDrop(); if (!d) return;
+  const slot = WEAPONS[d.w].slot, have = me.loadout[slot];
+  if (have && !swap) return;
+  const rec = dropMeshes.get(d.did); if (now() - rec.asked < 0.8) return;
+  rec.asked = now();
+  sendToHost({ t:'pick', did: d.did, swap: have || undefined });
+}
+function updateDrops(dt, t) {
+  for (const d of dropMeshes.values()) { d.g.rotation.y += dt * 0.9; d.g.position.y = 0.22 + Math.sin(t * 2 + d.phase) * 0.04; }
+  const d = started && me.alive ? nearestDrop() : null;
+  let hint = '';
+  if (d) {
+    const have = me.loadout[WEAPONS[d.w].slot];
+    if (!have) pickUp(false); // empty slot: just walk over it
+    else hint = `${IS_TOUCH ? '✋' : 'E'} — подобрать ${WEAPONS[d.w].name}` + (have !== d.w ? ` (вместо ${WEAPONS[have].name})` : '');
+  }
+  $('#pickhint').textContent = hint;
+  $('#pickhint').style.display = hint ? 'block' : 'none';
+  if (IS_TOUCH) $('#tPick').style.display = hint ? 'flex' : 'none';
 }
 
 // ================= destruction =================
@@ -1998,7 +2095,7 @@ function hostBlast(at, from, { power = 1, radius = NADE.radius, w = 'grenade', n
     // a wall between you and the blast protects you; half-cover protects partly
     const seen = (lineOfSight(at, body) ? 0.75 : 0) + (lineOfSight(at, head) ? 0.25 : 0);
     if (!seen) continue;
-    const dmg = NADE.maxDmg * pw * (1 - d / radius) * seen;
+    const dmg = weaponDmg(w) * (cfg.nadePower / 100) * (1 - d / radius) * seen; // damage at the centre is set per weapon by the admin
     if (dmg < 1) continue;
     const dir = body.clone().sub(at).normalize();
     hostDamage(from, v.id, dmg, 'blast', w, [body.x, body.y, body.z], [dir.x, dir.y, dir.z], [at.x, at.y, at.z]);
@@ -2034,6 +2131,7 @@ function hostBlast(at, from, { power = 1, radius = NADE.radius, w = 'grenade', n
 }
 // new match: walls rebuilt, props back in place, rubble cleared
 function resetWorld() {
+  for (const did of [...dropMeshes.keys()]) removeDrop(did);
   for (const w of walls) {
     for (const im of w.meshes) if (im) { scene.remove(im); const i = worldMeshes.indexOf(im); if (i >= 0) worldMeshes.splice(i, 1); }
     for (const b of w.boxes) { const i = colliders.indexOf(b); if (i >= 0) colliders.splice(i, 1); }
@@ -2057,12 +2155,13 @@ function resetWorld() {
 // what is already broken, for a player who joins in the middle of a game
 function worldState() {
   const r = v => +v.toFixed(3);
-  return { t:'world',
+  return { t:'world', drops: [...H.drops.values()].map(d => [d.did, d.w, d.p]),
     walls: walls.map(w => [...w.alive.keys()].filter(c => !w.alive[c])),
     props: props.filter(p => !p.alive || p.obj.position.y !== p.y0).map(p => [p.id, p.alive ? 1 : 0, p.obj.parent ? 1 : 0,
       [r(p.obj.position.x), r(p.obj.position.y), r(p.obj.position.z)], [r(p.obj.rotation.x), r(p.obj.rotation.y), r(p.obj.rotation.z)]]) };
 }
 function applyWorldState(m) {
+  for (const [did, w, p] of m.drops || []) spawnDrop(did, w, p);
   m.walls.forEach((dead, i) => { if (dead.length) walls[i].kill(dead); });
   for (const [id, alive, shown, pos, rot] of m.props) {
     const p = props[id];
@@ -2162,7 +2261,7 @@ function playSample(name, vol = 1, dist = 0, rate = 1) {
 // guns without their own recording borrow a close relative at another pitch:
 // Uzi = 9 mm pistol fired fast, double-barrel = shotgun lower and louder, minigun = 7.62 rifle pitched up,
 // launcher / RPG = a deep shotgun "thump" plus a synthetic whoosh
-const SHOT_ALIAS = { uzi:['beretta', 1.08, 0.9], dbshotgun:['shotgun', 0.85, 1.25], minigun:['ak47', 1.18, 0.75], launcher:['shotgun', 0.55, 0.7], rpg:['shotgun', 0.5, 0.8] };
+const SHOT_ALIAS = { zhangomet:['sniper', 1.45, 0.8], uzi:['beretta', 1.08, 0.9], dbshotgun:['shotgun', 0.85, 1.25], minigun:['ak47', 1.18, 0.75], launcher:['shotgun', 0.55, 0.7], rpg:['shotgun', 0.5, 0.8] };
 function playShot(kind, vol = 1, dist = 0) {
   if (vol < 0.03 || MUTED) return;
   if (kind === 'laser') return playLaser(vol, dist);
@@ -2231,7 +2330,10 @@ const me = {
   lastShot: 0, reloadEnd: 0, bloom: 0, firing: false, firedThisClick: false, stepDist: 0,
 };
 function giveWeapon(k) { me.ammo[k] = WEAPONS[k].mag; me.reserve[k] = WEAPONS[k].reserve; }
-function resetLoadout() { me.loadout = { 1:null, 2:START_PISTOL, 3:'knife', 4:null }; me.nades = 0; giveWeapon(START_PISTOL); me.weapon = START_PISTOL; }
+function resetLoadout() { me.loadout = { 1:'knife', 2:START_PISTOL }; me.nades = 0; giveWeapon(START_PISTOL); me.weapon = START_PISTOL; }
+// the strongest thing you carry: a main weapon if you have one, else the pistol
+function bestWeapon() { for (const s of MAIN_SLOTS) if (me.loadout[s]) return me.loadout[s]; return me.loadout[2] || 'knife'; }
+const ownedGuns = () => Object.values(me.loadout).filter(k => k && k !== 'knife' && k !== 'grenade');
 giveWeapon(START_PISTOL);
 const keys = {};
 let myId = null, started = false, locked = false, showBoard = false, gamePaused = false;
@@ -2314,7 +2416,20 @@ function startClient() {
 function showErr(t) { $('#err').textContent = t; $('#err2').textContent = t; }
 
 // ================= HOST: authoritative game state =================
-const H = { players: new Map(), bots: [], snapTimer: 0, winLock: false, paused: false };
+const H = { players: new Map(), bots: [], snapTimer: 0, winLock: false, paused: false, drops: new Map() };
+let dropSeq = 0;
+function hostDrop(w, pos) {
+  const d = { did: 'd' + (dropSeq++), w, p: [+pos[0].toFixed(2), 0, +pos[2].toFixed(2)], t: now() };
+  H.drops.set(d.did, d);
+  hostBroadcast({ t:'drop', did: d.did, w, p: d.p });
+}
+// what falls out of a dead player's hands: the main weapon they held, else the best main weapon they carried
+function droppedWeapon(v) {
+  const carried = v.bot ? [v.w] : (v.lo || []);
+  if (MAIN_SLOTS.includes(WEAPONS[v.w]?.slot)) return v.w;
+  for (const s of MAIN_SLOTS) { const k = carried.find(k => WEAPONS[k]?.slot === s); if (k) return k; }
+  return null;
+}
 
 function pickSpawn(team) {
   const [cx, cz] = MAPDEF.spawns[team];
@@ -2360,7 +2475,7 @@ function hostHandle(from, m) {
   }
   const p = H.players.get(from); if (!p) return;
   if (H.paused && m.t !== 'st') return; // during a pause nothing is shot, thrown or bought
-  if (m.t === 'st') { if (p.alive) { p.p = m.p; p.ry = m.ry; p.rx = m.rx; p.w = m.w; } }
+  if (m.t === 'st') { if (p.alive) { p.p = m.p; p.ry = m.ry; p.rx = m.rx; p.w = m.w; p.c = m.c ? 1 : 0; if (Array.isArray(m.lo)) p.lo = m.lo.filter(k => WEAPONS[k]); } }
   else if (m.t === 'shot') {
     if (!p.alive) return;
     hostBroadcast({ t:'shot', id: from, o: m.o, e: m.e, es: m.es, w: m.w }, from);
@@ -2370,7 +2485,8 @@ function hostHandle(from, m) {
     const w = WEAPONS[m.w]; if (!w || !p.alive) return;
     const part = LIMB_FACTOR[m.part] ? m.part : 'body';
     const falloff = THREE.MathUtils.clamp(+m.f || 1, 0.25, 1); // shotgun pellets weaken with distance
-    const dmg = (part === 'head' ? w.dmg * w.head : w.dmg * LIMB_FACTOR[part]) * falloff;
+    const base = weaponDmg(m.w); // set per weapon in the admin panel
+    const dmg = (part === 'head' ? base * w.head : base * LIMB_FACTOR[part]) * falloff;
     hostDamage(from, m.target, dmg, part, m.w, m.pt, m.dir);
   }
   else if (m.t === 'buy') {
@@ -2394,6 +2510,15 @@ function hostHandle(from, m) {
     if (!p.alive || p.nades <= 0) return;
     p.nades--;
     hostThrow(from, m.o, m.v);
+  }
+  else if (m.t === 'pick') {
+    const d = H.drops.get(m.did);
+    if (!d || !p.alive || Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) > 2.5) return;
+    H.drops.delete(d.did);
+    hostBroadcast({ t:'undrop', did: d.did });
+    // swapping: what you held in that slot is left lying in its place
+    if (WEAPONS[m.swap] && WEAPONS[m.swap].slot === WEAPONS[d.w].slot && m.swap !== d.w) hostDrop(m.swap, p.p);
+    hostSend(from, { t:'got', w: d.w });
   }
   else if (m.t === 'proj') {
     if (!p.alive || !WEAPONS[m.w]?.proj) return;
@@ -2421,6 +2546,8 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
   hostBroadcast({ t:'bl', id: v.id, part, pt, dir, big: v.hp <= 0 });
   if (v.hp <= 0) {
     v.alive = false; v.d++;
+    const lost = droppedWeapon(v);
+    if (lost) hostDrop(lost, v.p);
     const head = part === 'head';
     let reward = 0;
     if (a.team !== v.team) { a.k++; reward = head ? cfg.headReward : cfg.killReward; }
@@ -2441,6 +2568,7 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
 }
 // new match: scores and money back to the start
 function hostRestart(text) {
+  H.drops.clear();
   for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; q.nades = 0; hostSpawn(q); }
   H.winLock = false;
   hostBroadcast({ t:'reset' });
@@ -2472,13 +2600,14 @@ function hostTick(dt) {
     if (n.t >= NADE.fuse) { hostNades.splice(i, 1); hostBlast(n.pos, n.from, { nid: n.nid }); }
   }
   hostFireTick(dt);
+  for (const d of H.drops.values()) if (now() - d.t > 90) { H.drops.delete(d.did); hostBroadcast({ t:'undrop', did: d.did }); } // weapons lying around vanish after 90 s
   H.snapTimer -= dt;
   if (H.snapTimer <= 0) { H.snapTimer = 0.05; sendSnap(); }
 }
 function sendSnap() {
   const r = v => Math.round(v * 100) / 100;
   const pl = [];
-  for (const p of H.players.values()) pl.push([p.id, p.name, p.team, r(p.p[0]), r(p.p[1]), r(p.p[2]), r(p.ry), r(p.rx), p.hp, p.alive ? 1 : 0, p.k, p.d, p.w, p.money, p.armor]);
+  for (const p of H.players.values()) pl.push([p.id, p.name, p.team, r(p.p[0]), r(p.p[1]), r(p.p[2]), r(p.ry), r(p.rx), p.hp, p.alive ? 1 : 0, p.k, p.d, p.w, p.money, p.armor, p.c ? 1 : 0]);
   hostBroadcast({ t:'snap', pl });
 }
 
@@ -2488,7 +2617,9 @@ function loadCfg() {
   try {
     const saved = JSON.parse(store.get('ks-cfg', 'null'));
     if (saved) cfg = { ...structuredClone(DEFAULT_CFG), ...saved,
-      prices: { ...DEFAULT_CFG.prices, ...saved.prices }, ammoPrices: { ...DEFAULT_CFG.ammoPrices, ...saved.ammoPrices } };
+      prices: { ...DEFAULT_CFG.prices, ...saved.prices }, ammoPrices: { ...DEFAULT_CFG.ammoPrices, ...saved.ammoPrices },
+      dmg: { ...DEFAULT_CFG.dmg, ...saved.dmg }, names: { ...saved.names } };
+    applyNames();
   } catch {}
 }
 function pushCfg() {
@@ -2509,7 +2640,8 @@ function adminHello(conn, m) {
 function adminState() {
   return { t:'admState', room: roomCode, paused: H.paused, cfg, map: mapId,
     maps: Object.entries(MAPS).map(([id, d]) => [id, d.name]),
-    items: [...BUY, 'kevlar', 'helmet', 'grenade'].map(k => [k, ITEM_NAME[k]]),
+    // [key, name, slot (0 = gear), default name] — for the weapons table: name, damage, price, ammo price
+    items: [...BUY, 'grenade', 'knife', 'kevlar', 'helmet'].map(k => [k, ITEM_NAME[k], WEAPONS[k]?.slot || 0, DEFAULT_NAMES[k] || ITEM_NAME[k]]),
     players: [...H.players.values()].map(p => ({ id: p.id, name: p.name, team: p.team, money: p.money, k: p.k, d: p.d, bot: !!p.bot, alive: p.alive, hp: p.hp, me: p.id === myId })) };
 }
 function adminRefresh() {
@@ -2522,13 +2654,17 @@ async function adminCommand(m) {
   const int = v => Math.max(0, Math.round(+v || 0));
   switch (m.cmd) {
     case 'cfg':
-      if (!(m.key in DEFAULT_CFG) || m.key === 'map' || m.key === 'prices' || m.key === 'ammoPrices') break;
-      cfg[m.key] = CFG_BOOL.includes(m.key) ? !!m.value : int(m.value);
+      if (!(m.key in DEFAULT_CFG) || ['map', 'prices', 'ammoPrices', 'dmg', 'names'].includes(m.key)) break;
+      cfg[m.key] = CFG_BOOL.includes(m.key) ? !!m.value
+        : m.key === 'jump' ? THREE.MathUtils.clamp(Math.round((+m.value || 1.3) * 10) / 10, 0.3, 30) // metres, can be fractional
+        : int(m.value);
       if (m.key === 'winKills') cfg.winKills = Math.max(1, cfg.winKills);
       if (m.key === 'botLevel') cfg.botLevel = Math.min(2, cfg.botLevel);
       pushCfg(); break;
     case 'price': if (m.item in cfg.prices) { cfg.prices[m.item] = int(m.value); pushCfg(); } break;
     case 'ammo': if (m.item in cfg.ammoPrices) { cfg.ammoPrices[m.item] = int(m.value); pushCfg(); } break;
+    case 'dmg': if (m.item in DEFAULT_DMG) { cfg.dmg[m.item] = Math.min(10000, int(m.value)); pushCfg(); } break;
+    case 'name': if (WEAPONS[m.item]) { cfg.names[m.item] = String(m.value || '').trim().slice(0, 24); applyNames(); pushCfg(); } break;
     case 'money': setMoney(m.id, m.add !== undefined ? (H.players.get(m.id)?.money ?? 0) + (+m.add || 0) : int(m.value)); break;
     case 'moneyAll': for (const p of H.players.values()) if (!p.bot) p.money = Math.min(cfg.maxMoney, int(m.value)); break;
     case 'pause': hostPause(!!m.on); break;
@@ -2641,7 +2777,7 @@ function botThink(b, dt) {
         const roll = Math.random();
         const part = roll < [0.05, 0.08, 0.14][lvl] ? 'head' : roll < 0.6 ? 'body' : ['larm','rarm','lleg','rleg'][Math.floor(Math.random() * 4)];
         const dir = target.clone().sub(eye).normalize();
-        hostDamage(b.id, enemy.id, part === 'head' ? 60 : 17, part, b.w, [target.x, target.y, target.z], [dir.x, dir.y, dir.z]);
+        hostDamage(b.id, enemy.id, Math.round(weaponDmg(b.w) * (part === 'head' ? 1.7 : 0.5)), part, b.w, [target.x, target.y, target.z], [dir.x, dir.y, dir.z]);
       }
     }
   } else {
@@ -2667,7 +2803,7 @@ function botThink(b, dt) {
 }
 
 // ================= CLIENT: handle messages =================
-const WORLD_MSGS = ['world', 'brk', 'prop', 'nade', 'boom', 'fire', 'reset'];
+const WORLD_MSGS = ['world', 'brk', 'prop', 'nade', 'boom', 'fire', 'reset', 'drop', 'undrop'];
 function clientHandle(m) {
   if (mapLoading && WORLD_MSGS.includes(m.t)) { pendingWorld.push(m); return; } // the new map isn't built yet
   switch (m.t) {
@@ -2679,7 +2815,7 @@ function clientHandle(m) {
     case 'snap': {
       const seen = new Set();
       teamScore = { ct:0, t:0 };
-      for (const [id, name, team, x, y, z, ry, rx, hp, alive, k, d, w, money, armor] of m.pl) {
+      for (const [id, name, team, x, y, z, ry, rx, hp, alive, k, d, w, money, armor, crouch] of m.pl) {
         seen.add(id); teamScore[team] += k;
         if (id === myId) { me.money = money; me.armor = armor; if (!armor) me.helmet = false; }
         let r = remotes.get(id);
@@ -2687,7 +2823,7 @@ function clientHandle(m) {
         if (!r) { r = { id, name, team, buf: [], speed: 0, back: false, target: new THREE.Vector3(x, y, z), avatar: id === myId ? null : makeAvatar(id, name, team) }; if (r.avatar) r.avatar.position.set(x, y, z); remotes.set(id, r); }
         if (r.alive && !alive) r.buf.length = 0;
         if (!r.alive && alive && r.avatar) restoreLimbs(r.avatar); // respawned: put the body back together
-        Object.assign(r, { alive: !!alive, k, d, hp, w, money });
+        Object.assign(r, { alive: !!alive, k, d, hp, w, money, crouch: !!crouch });
         r.target.set(x, y, z);
         // position history for smooth interpolation (drawn ~100 ms in the past)
         const last = r.buf[r.buf.length - 1];
@@ -2702,13 +2838,14 @@ function clientHandle(m) {
     case 'spawn':
       me.pos.set(...m.p); me.vel.set(0,0,0); me.alive = true; me.hp = 100;
       me.yaw = myTeam === 'ct' ? Math.PI : 0; me.pitch = 0;
-      for (const s of [1, 2]) if (me.loadout[s]) giveWeapon(me.loadout[s]); // fresh ammo for what you still own
-      me.weapon = me.loadout[1] || me.loadout[2];
+      for (const g of ownedGuns()) giveWeapon(g); // fresh ammo for what you still own
+      me.weapon = bestWeapon();
       me.reloadEnd = 0; setZoom(false);
       showCenter('', 0);
       break;
     case 'cfg':
       cfg = m.cfg;
+      applyNames();
       if (cfg.map && cfg.map !== mapId) switchMap(cfg.map); // the admin picked another map
       $('#goal').textContent = 'до ' + cfg.winKills;
       renderBuyMenu();
@@ -2716,7 +2853,7 @@ function clientHandle(m) {
     case 'bought': {
       me.money = m.money; me.armor = m.armor; me.helmet = m.helmet;
       const item = m.item;
-      if (item === 'grenade') { me.nades = m.nades; me.loadout[4] = 'grenade'; }
+      if (item === 'grenade') { me.nades = m.nades; me.loadout[7] = 'grenade'; }
       else if (item.startsWith('ammo:')) { const g = item.slice(5); me.reserve[g] = (me.reserve[g] || 0) + WEAPONS[g].mag; }
       else if (WEAPONS[item]) { me.loadout[WEAPONS[item].slot] = item; giveWeapon(item); me.weapon = null; switchWeapon(item); }
       playSample('draw', 0.5);
@@ -2751,6 +2888,14 @@ function clientHandle(m) {
     }
     case 'fire': startFire(new THREE.Vector3(...m.p), m.s); break;
     case 'world': applyWorldState(m); break;
+    case 'drop': spawnDrop(m.did, m.w, m.p); break;
+    case 'undrop': removeDrop(m.did); break;
+    case 'got': {
+      const slot = WEAPONS[m.w].slot;
+      me.loadout[slot] = m.w; giveWeapon(m.w); me.weapon = null; switchWeapon(m.w);
+      moneyPopup(-1, 'Подобрано: ' + WEAPONS[m.w].name);
+      break;
+    }
     case 'dmg':
       me.hp = m.hp; me.armor = m.armor; me.helmet = m.helmet;
       $('#dmg').style.opacity = 1; setTimeout(() => $('#dmg').style.opacity = 0, 150);
@@ -2866,7 +3011,7 @@ function releaseTrigger(btn) {
 }
 function cycleWeapon(dir) {
   let s = WEAPONS[me.weapon].slot;
-  do s = (s + (dir > 0 ? 0 : 2)) % 4 + 1; while (!me.loadout[s]); // skip empty slots
+  do s = (s + (dir > 0 ? 0 : 7)) % 9 + 1; while (!me.loadout[s]); // skip empty slots
   selectSlot(s);
 }
 addEventListener('mousedown', e => { if (locked && !IS_TOUCH) pressTrigger(e.button); });
@@ -2875,7 +3020,9 @@ addEventListener('mouseup', e => { if (!IS_TOUCH) releaseTrigger(e.button); });
 addEventListener('wheel', e => { if (locked) cycleWeapon(e.deltaY); });
 
 // ---- touch controls: floating joystick on the left, swipe on the right to look, buttons for everything else
-const touch = { move: new THREE.Vector2(), joy: null, look: null, fire: null, origin: new THREE.Vector2() };
+const touch = { move: new THREE.Vector2(), joy: null, look: null, fire: null, origin: new THREE.Vector2(), crouch: false };
+// Ctrl is crouch, but Ctrl+W closes a browser tab: while playing, the browser first asks "leave the page?"
+addEventListener('beforeunload', e => { if (started) { e.preventDefault(); e.returnValue = ''; } });
 if (IS_TOUCH) {
   document.body.classList.add('touch');
   const layer = $('#touchLayer'), joyBase = $('#joyBase'), joyKnob = $('#joyKnob'), R = 55;
@@ -2917,9 +3064,11 @@ if (IS_TOUCH) {
   hold('#tJump', () => { keys.Space = true; }, () => { keys.Space = false; });
   hold('#tReload', () => startReload());
   hold('#tSwitch', () => cycleWeapon(1));
-  hold('#tNade', () => { if (me.nades > 0) selectSlot(4); });
+  hold('#tNade', () => { if (me.nades > 0) selectSlot(7); });
   hold('#tScope', () => pressTrigger(2), () => releaseTrigger(2));
+  hold('#tCrouch', () => { touch.crouch = !touch.crouch; $('#tCrouch').classList.toggle('lock', touch.crouch); });
   hold('#tBuy', () => toggleBuy(true));
+  hold('#tPick', () => pickUp(true));
   hold('#tScore', () => { showBoard = true; }, () => { showBoard = false; });
   hold('#tPause', () => setPlaying(false));
   // phones should be held sideways
@@ -2942,7 +3091,7 @@ function renderBuyMenu() {
     `<button data-item="${item}" ${!zone || owned || me.money < price ? 'disabled' : ''}><b>${key}</b>${esc(ITEM_NAME[item] || item)}<span class="price">${owned ? 'есть' : '$' + price}</span></button>`;
   const P = cfg.prices;
   const helmetPrice = me.armor >= 100 ? P.helmet - P.kevlar : P.helmet;
-  const ammoBtns = [1, 2].map(s => me.loadout[s]).filter(Boolean).map(g =>
+  const ammoBtns = ownedGuns().map(g =>
     `<button data-item="ammo:${g}" ${!zone || me.money < cfg.ammoPrices[g] ? 'disabled' : ''}><b>${g === me.weapon ? 0 : ''}</b>Патроны ${WEAPONS[g].name} (+${WEAPONS[g].mag})<span class="price">$${cfg.ammoPrices[g]}</span></button>`).join('');
   $('#buyBody').innerHTML =
     BUY_GROUPS.map(([title, list]) => `<div class="buycol"><h3>${title}</h3>${list.map(g => btn('', g, P[g], me.loadout[WEAPONS[g].slot] === g)).join('')}</div>`).join('') +
@@ -2956,6 +3105,7 @@ function buy(item) { sendToHost({ t:'buy', item }); }
 addEventListener('keydown', e => {
   if (!started) return;
   keys[e.code] = true;
+  if (locked && e.ctrlKey) e.preventDefault(); // crouching with Ctrl must not trigger browser shortcuts (Ctrl+S, Ctrl+D…)
   if (e.code === 'Tab') { e.preventDefault(); showBoard = true; }
   if (e.code === 'KeyB') { toggleBuy(!buyOpen); return; }
   const n = +e.code.replace('Digit', '');
@@ -2964,9 +3114,10 @@ addEventListener('keydown', e => {
     if (e.code === 'Escape') toggleBuy(false);
     return;
   }
-  if (n >= 1 && n <= 4) selectSlot(n);
-  if (e.code === 'KeyG' && me.nades > 0) selectSlot(4);
+  if (n >= 1 && n <= 9) selectSlot(n);
+  if (e.code === 'KeyG' && me.nades > 0) selectSlot(7);
   if (e.code === 'KeyR') startReload();
+  if (e.code === 'KeyE') pickUp(true);
   if (e.code === 'KeyP' && isHost) hostPause(!H.paused); // the game's creator can pause everyone
 });
 addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Tab') showBoard = false; });
@@ -2986,7 +3137,7 @@ function setZoom(on) {
   $('#scope').style.display = on ? 'block' : 'none';
   $('#cross').style.display = on ? 'none' : 'block';
 }
-const RELOAD_SND = { ak47:'reload_rifle', m4:'reload_rifle', uzi:'reload_rifle', minigun:'reload_rifle', laser:'reload_pistol', launcher:'pump', rpg:'bolt',
+const RELOAD_SND = { zhangomet:'reload_rifle', ak47:'reload_rifle', m4:'reload_rifle', uzi:'reload_rifle', minigun:'reload_rifle', laser:'reload_pistol', launcher:'pump', rpg:'bolt',
   shotgun:'pump', dbshotgun:'bolt', sniper:'bolt', deagle:'reload_pistol', beretta:'reload_pistol' };
 function startReload() {
   const w = WEAPONS[me.weapon];
@@ -3008,7 +3159,7 @@ function tryFire() {
   me.lastShot = t; me.firedThisClick = true;
   if (me.weapon !== 'knife') me.ammo[me.weapon]--;
   const moving = Math.hypot(me.vel.x, me.vel.z) > 3.5;
-  const spread = (w.zoom && me.zoom ? 0.0008 : w.spread) + me.bloom + (moving ? 0.025 : 0) + (me.onGround ? 0 : 0.06);
+  const spread = ((w.zoom && me.zoom ? 0.0008 : w.spread) + me.bloom + (moving ? 0.025 : 0) + (me.onGround ? 0 : 0.06)) * (me.crouch ? 0.6 : 1); // crouching steadies the aim
   me.bloom = Math.min(me.bloom + w.bloom, 0.05);
   const origin = camera.getWorldPosition(new THREE.Vector3());
   const aim = new THREE.Vector3(); camera.getWorldDirection(aim);
@@ -3085,7 +3236,7 @@ function laserBeam(from, to) {
 }
 
 // ================= main loop =================
-let vmKick = 0, bob = 0, sendTimer = 0, holdK = 0;
+let vmKick = 0, bob = 0, sendTimer = 0, holdK = 0, eyeH = EYE;
 function enterGame() {
   started = true;
   $('#menu').style.display = 'none';
@@ -3124,7 +3275,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, H, hostThrow, explosion, walls, props, hostBlast, colliders, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
@@ -3151,13 +3302,14 @@ function frame() {
         fx += touch.move.x; fz += touch.move.y; // joystick: pushing it a little walks, all the way runs
       }
       const len = Math.hypot(fx, fz) || 1, push = Math.min(1, len);
-      const speed = (keys.ShiftLeft ? WALK : RUN) * push * (me.weapon === 'knife' ? 1.15 : WEAPONS[me.weapon].heavy || 1);
+      me.crouch = locked && (keys.ControlLeft || keys.ControlRight || keys.KeyC || touch.crouch);
+      const speed = (me.crouch ? WALK * 0.75 : keys.ShiftLeft ? WALK : RUN) * push * (me.weapon === 'knife' ? 1.15 : WEAPONS[me.weapon].heavy || 1);
       const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
       const wx = (fx * cos + fz * sin) / len * speed, wz = (-fx * sin + fz * cos) / len * speed;
       const accel = me.onGround ? 14 : 3;
       me.vel.x += (wx - me.vel.x) * Math.min(1, accel * dt);
       me.vel.z += (wz - me.vel.z) * Math.min(1, accel * dt);
-      if (locked && keys.Space && me.onGround) { me.vel.y = JUMP; me.onGround = false; }
+      if (locked && keys.Space && me.onGround) { me.vel.y = jumpSpeed() * (me.crouch ? 0.8 : 1); me.onGround = false; }
       me.vel.y -= GRAVITY * dt;
       me.onGround = moveBody(me.pos, me.vel, dt);
       // minigun: holding fire spins the barrels up, only then it shoots
@@ -3178,7 +3330,8 @@ function frame() {
       // own footsteps when running (Shift = quiet walk, like in CS)
       if (me.onGround && hs > 4) { me.stepDist += hs * dt; if (me.stepDist > 1.8) { me.stepDist = 0; playSample('step' + (1 + Math.floor(Math.random() * 4)), 0.12); } }
     }
-    camera.position.set(me.pos.x, me.pos.y + (me.alive ? EYE : 0.4), me.pos.z);
+    eyeH += ((me.alive ? (me.crouch ? CROUCH_EYE : EYE) : 0.4) - eyeH) * Math.min(1, dt * 12); // smooth crouch / stand up
+    camera.position.set(me.pos.x, me.pos.y + eyeH, me.pos.z);
     // explosions shake the camera
     const sh = shake * shake * 12;
     camera.rotation.set(me.pitch + (Math.random() - .5) * sh, me.yaw + (Math.random() - .5) * sh, (me.alive ? 0 : 0.5) + (Math.random() - .5) * sh);
@@ -3201,7 +3354,7 @@ function frame() {
     sendTimer -= dt;
     if (sendTimer <= 0 && myId) {
       sendTimer = 0.05;
-      if (me.alive) sendToHost({ t:'st', p: [me.pos.x, me.pos.y, me.pos.z], ry: me.yaw, rx: me.pitch, w: me.weapon });
+      if (me.alive) sendToHost({ t:'st', p: [me.pos.x, me.pos.y, me.pos.z], ry: me.yaw, rx: me.pitch, w: me.weapon, c: me.crouch ? 1 : 0, lo: ownedGuns() });
     }
 
     const renderT = t - 0.1; // draw others 100 ms in the past, between two received positions
@@ -3224,6 +3377,7 @@ function frame() {
       }
       u.body.rotation.x = THREE.MathUtils.lerp(u.body.rotation.x, r.alive ? 0 : -Math.PI/2, Math.min(1, dt * 7));
       u.body.position.y = r.alive ? 0 : 0.15;
+      u.body.scale.y = THREE.MathUtils.lerp(u.body.scale.y, r.alive && r.crouch ? 0.66 : 1, Math.min(1, dt * 10));
       // walk/run with hysteresis, and clip speed matched to ground speed so feet don't slide
       const sp = r.speed;
       let anim = u.cur;
@@ -3279,6 +3433,7 @@ function frame() {
 
   updateGore(dt);
   updateNades(dt);
+  updateDrops(dt, t);
   updateExplosions(dt);
   updateDebris(dt);
   updateMovers(dt);
