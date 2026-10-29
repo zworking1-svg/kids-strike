@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kids Strike — админ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ct:#8ab8ff; --t:#f2c06e; --accent:#e8a33d; --bg:#0b0d10; --panel:#12151b; --line:rgba(255,255,255,.08); --text:#eef1f5; --muted:#8e98a6; --ok:#7ee787; --bad:#ff7a7a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:500 17px Rajdhani,"Segoe UI",system-ui,sans-serif; }
+  header { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; padding:12px 18px; background:#0f1217; border-bottom:3px solid var(--accent); }
+  h1 { margin:0; font-size:26px; letter-spacing:1px; text-transform:uppercase; } h1 span { color:var(--accent); }
+  #status { color:var(--muted); font-weight:600; } #status.ok { color:var(--ok); } #status.bad { color:var(--bad); }
+  main { max-width:1150px; margin:0 auto; padding:16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+  section { background:var(--panel); border:1px solid var(--line); padding:14px 16px; }
+  section.wide { grid-column:1/-1; }
+  h2 { margin:0 0 10px; font-size:17px; color:var(--accent); text-transform:uppercase; letter-spacing:1px; }
+  label { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:7px 0; }
+  label.chk { justify-content:flex-start; }
+  input[type=number], select { width:110px; padding:6px 8px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 17px Rajdhani,sans-serif; }
+  input[type=checkbox] { width:19px; height:19px; accent-color:var(--accent); }
+  button { cursor:pointer; padding:7px 12px; border:1px solid #2b313b; background:#1a1f27; color:var(--text); font:700 15px Rajdhani,sans-serif; text-transform:uppercase; letter-spacing:.5px; }
+  button:hover { border-color:#5a6576; } button.on { background:var(--accent); color:#111; border-color:var(--accent); }
+  button.big { font-size:20px; padding:10px 22px; }
+  #pauseBtn.on { background:#d23; color:#fff; border-color:#d23; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; }
+  section > button, section > .row { margin:4px 0; }
+  table { width:100%; border-collapse:collapse; }
+  td, th { padding:6px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+  th { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:1px; }
+  td.money { color:var(--ok); font-weight:700; white-space:nowrap; }
+  td .row { gap:4px; } td button { padding:4px 8px; font-size:13px; }
+  td input[type=number] { width:96px; }
+  .n-ct { color:var(--ct); } .n-t { color:var(--t); } .dead { opacity:.5; }
+  .prices { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:2px 24px; }
+  .prices input { width:84px !important; }
+  .muted { color:var(--muted); font-size:14px; }
+  #gate { max-width:520px; margin:12vh auto; background:var(--panel); padding:24px; border-left:3px solid var(--accent); }
+  #gate input { width:100%; padding:9px; margin:6px 0 12px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 18px Rajdhani,sans-serif; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<div id="gate" style="display:none">
+  <h1>Kids <span>Strike</span> — админ</h1>
+  <p class="muted">Открой эту страницу кнопкой «Открыть админ-панель» в меню паузы игры (Esc) на компьютере создателя игры — тогда всё подставится само. Или введи данные вручную:</p>
+  <div>Код комнаты</div><input id="gRoom" placeholder="например, k3d7p">
+  <div>Ключ админа</div><input id="gKey" placeholder="из ссылки «Открыть админ-панель»">
+  <button class="big" id="gGo">Подключиться</button>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>Kids <span>Strike</span> · админ</h1>
+    <span id="status">Подключение…</span>
+    <span class="muted" id="room"></span>
+    <span style="flex:1"></span>
+    <button class="big" id="pauseBtn">⏸ Пауза для всех</button>
+  </header>
+  <main>
+    <section class="wide">
+      <h2>Игроки</h2>
+      <table><thead><tr><th>Игрок</th><th>Команда</th><th>Деньги</th><th>Счёт</th><th>Поставить деньги</th><th></th></tr></thead><tbody id="players"></tbody></table>
+      <div class="row" style="margin-top:10px;align-items:center">
+        <span>Всем игрокам поставить</span><input type="number" id="allMoney" min="0" step="500" value="10000"><button id="allMoneyBtn">Установить всем</button>
+      </div>
+    </section>
+    <section>
+      <h2>Карта</h2>
+      <div class="row" id="maps"></div>
+      <p class="muted">Смена карты сразу начинает новый матч у всех.</p>
+      <h2 style="margin-top:14px">Матч</h2>
+      <button data-cmd="restart">Новый матч (сбросить счёт и деньги)</button>
+      <button data-cmd="defaults">Вернуть настройки по умолчанию</button>
+    </section>
+    <section>
+      <h2>Деньги</h2>
+      <label>Стартовые деньги, $<input type="number" data-cfg="startMoney" min="0" step="100"></label>
+      <label>За убийство, $<input type="number" data-cfg="killReward" min="0" step="50"></label>
+      <label>За убийство в голову, $<input type="number" data-cfg="headReward" min="0" step="50"></label>
+      <label>Штраф за смерть, $<input type="number" data-cfg="deathPenalty" min="0" step="50"></label>
+      <label>Максимум денег, $<input type="number" data-cfg="maxMoney" min="0" step="1000"></label>
+    </section>
+    <section>
+      <h2>Правила</h2>
+      <label>Убийств для победы<input type="number" data-cfg="winKills" min="1" max="500"></label>
+      <label>Возрождение через, сек<input type="number" data-cfg="respawn" min="0" max="30"></label>
+      <label class="chk"><input type="checkbox" data-cfg="loseWeapons"> Терять оружие при смерти</label>
+      <label class="chk"><input type="checkbox" data-cfg="buyAnywhere"> Покупать в любом месте карты</label>
+      <label class="chk"><input type="checkbox" data-cfg="infAmmo"> Бесконечные патроны</label>
+      <label class="chk"><input type="checkbox" data-cfg="ff"> Огонь по своим</label>
+      <label class="chk"><input type="checkbox" data-cfg="blood"> Кровь</label>
+      <label class="chk"><input type="checkbox" data-cfg="gore"> Отлетают части тела</label>
+      <label>Гранат в руках, максимум<input type="number" data-cfg="maxNades" min="0" max="10"></label>
+      <label>Сила взрывов, %<input type="number" data-cfg="nadePower" min="0" max="500" step="10"></label>
+    </section>
+    <section>
+      <h2>Боты</h2>
+      <div class="row"><button data-cmd="bot" data-team="ct">+ Бот за Спецназ</button><button data-cmd="bot" data-team="t">+ Бот за Террористов</button></div>
+      <button data-cmd="nobots">Убрать всех ботов</button>
+      <label>Сложность<select data-cfg="botLevel"><option value="0">Лёгкие</option><option value="1">Нормальные</option><option value="2">Сложные</option></select></label>
+      <p class="muted">Отдельного бота можно удалить в таблице игроков.</p>
+    </section>
+    <section class="wide">
+      <h2>Цены, $ <span class="muted">(оружие · магазин патронов)</span></h2>
+      <div class="prices" id="prices"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const q = new URLSearchParams(location.search);
+let room = q.get('room'), key = q.get('key');
+try { key ||= localStorage.getItem('ks-admin-key'); } catch {}
+const TEAM = { ct: 'Спецназ', t: 'Террористы' };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+let conn = null, state = null;
+
+if (!room || !key) { $('#gate').style.display = 'block'; $('#gRoom').value = room || ''; $('#gKey').value = key || ''; }
+else connect();
+$('#gGo').onclick = () => { room = $('#gRoom').value.trim(); key = $('#gKey').value.trim(); if (room && key) { $('#gate').style.display = 'none'; connect(); } };
+
+function setStatus(text, cls) { $('#status').textContent = text; $('#status').className = cls || ''; }
+function connect() {
+  $('#app').style.display = 'block';
+  $('#room').textContent = 'Комната: ' + room;
+  const peer = new Peer(undefined, { debug: 1 });
+  peer.on('open', () => {
+    conn = peer.connect('kidstrike-v7-' + room, { reliable: true });
+    conn.on('open', () => conn.send({ t:'admHello', key }));
+    conn.on('data', onData);
+    conn.on('close', () => setStatus('Игра закрыта — открой её снова и обнови эту страницу', 'bad'));
+  });
+  peer.on('error', e => setStatus(e.type === 'peer-unavailable' ? 'Игра не найдена — создатель игры должен держать вкладку с игрой открытой' : 'Ошибка сети: ' + e.type, 'bad'));
+}
+function send(cmd, extra = {}) { if (conn?.open) conn.send({ cmd, ...extra }); }
+function onData(m) {
+  if (m.t === 'admNo') return setStatus('Неверный ключ админа', 'bad');
+  if (m.t === 'admOk') return setStatus('● Подключено', 'ok');
+  if (m.t === 'admState') { state = m; render(); }
+}
+
+// settings inputs: send a change right away; don't overwrite a field while the admin is typing in it
+document.querySelectorAll('[data-cfg]').forEach(el => el.addEventListener('change', () =>
+  send('cfg', { key: el.dataset.cfg, value: el.type === 'checkbox' ? el.checked : +el.value })));
+document.querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => {
+  if (b.dataset.cmd === 'defaults' && !confirm('Вернуть все настройки по умолчанию?')) return;
+  if (b.dataset.cmd === 'restart' && !confirm('Начать новый матч? Счёт и деньги сбросятся.')) return;
+  send(b.dataset.cmd, { team: b.dataset.team });
+});
+$('#pauseBtn').onclick = () => send('pause', { on: !state?.paused });
+$('#allMoneyBtn').onclick = () => send('moneyAll', { value: +$('#allMoney').value });
+
+function render() {
+  const s = state, cfg = s.cfg;
+  $('#pauseBtn').textContent = s.paused ? '▶ Продолжить игру' : '⏸ Пауза для всех';
+  $('#pauseBtn').classList.toggle('on', s.paused);
+  document.querySelectorAll('[data-cfg]').forEach(el => {
+    if (el === document.activeElement) return;
+    const v = cfg[el.dataset.cfg];
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  });
+  // maps
+  const maps = $('#maps');
+  if (maps.childElementCount !== s.maps.length) maps.innerHTML = s.maps.map(([id, name]) => `<button data-map="${id}">${esc(name)}</button>`).join('');
+  maps.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', b.dataset.map === s.map);
+    b.onclick = () => { if (b.dataset.map !== s.map && confirm('Сменить карту? Начнётся новый матч.')) send('map', { id: b.dataset.map }); };
+  });
+  // prices: built once, then only refreshed when not being edited
+  const pr = $('#prices');
+  if (!pr.childElementCount) {
+    pr.innerHTML = s.items.map(([k, name]) => `<label>${esc(name)}<span><input type="number" min="0" step="50" data-price="${k}">` +
+      (k in cfg.ammoPrices ? ` <input type="number" min="0" step="5" data-ammo="${k}" title="магазин патронов">` : '') + `</span></label>`).join('');
+    pr.querySelectorAll('input').forEach(el => el.addEventListener('change', () =>
+      el.dataset.price ? send('price', { item: el.dataset.price, value: +el.value }) : send('ammo', { item: el.dataset.ammo, value: +el.value })));
+  }
+  pr.querySelectorAll('input').forEach(el => { if (el !== document.activeElement) el.value = el.dataset.price ? cfg.prices[el.dataset.price] : cfg.ammoPrices[el.dataset.ammo]; });
+  renderPlayers(s.players);
+}
+// one row per player, kept between updates so a half-typed amount isn't lost
+function renderPlayers(list) {
+  const body = $('#players'), seen = new Set();
+  list.sort((a, b) => (a.bot - b.bot) || a.team.localeCompare(b.team));
+  for (const p of list) {
+    seen.add(p.id);
+    let tr = body.querySelector(`tr[data-id="${CSS.escape(p.id)}"]`);
+    if (!tr) {
+      tr = document.createElement('tr'); tr.dataset.id = p.id;
+      tr.innerHTML = `<td class="nm"></td><td class="tm"></td><td class="money"></td><td class="sc"></td><td class="set"></td><td class="act"></td>`;
+      if (!p.bot) {
+        tr.querySelector('.set').innerHTML = `<div class="row"><input type="number" min="0" step="500" placeholder="сумма"><button data-s>Установить</button>` +
+          `<button data-a="1000">+1000</button><button data-a="5000">+5000</button><button data-a="-1000">−1000</button><button data-z>$0</button></div>`;
+        const inp = tr.querySelector('input');
+        const set = () => { if (inp.value !== '') { send('money', { id: p.id, value: +inp.value }); inp.value = ''; } };
+        tr.querySelector('[data-s]').onclick = set;
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') set(); });
+        tr.querySelectorAll('[data-a]').forEach(b => b.onclick = () => send('money', { id: p.id, add: +b.dataset.a }));
+        tr.querySelector('[data-z]').onclick = () => send('money', { id: p.id, value: 0 });
+      }
+      tr.querySelector('.act').innerHTML = `<div class="row"><button data-t>Сменить команду</button>` +
+        (p.bot ? `<button data-r>Удалить</button>` : p.me ? '' : `<button data-k>Выгнать</button>`) + `</div>`;
+      tr.querySelector('[data-t]').onclick = () => send('team', { id: p.id });
+      tr.querySelector('[data-r]')?.addEventListener('click', () => send('remove', { id: p.id }));
+      tr.querySelector('[data-k]')?.addEventListener('click', () => { if (confirm('Выгнать ' + p.name + '?')) send('kick', { id: p.id }); });
+      body.appendChild(tr);
+    }
+    tr.className = p.alive ? '' : 'dead';
+    tr.querySelector('.nm').innerHTML = `<span class="n-${p.team}">${p.bot ? '🤖 ' : ''}${esc(p.name)}</span>${p.me ? ' <span class="muted">(создатель)</span>' : ''}`;
+    tr.querySelector('.tm').textContent = TEAM[p.team];
+    tr.querySelector('.money').textContent = p.bot ? '' : '$' + p.money;
+    tr.querySelector('.sc').textContent = `${p.k} / ${p.d}`;
+  }
+  for (const tr of [...body.children]) if (!seen.has(tr.dataset.id)) tr.remove();
+}
+</script>
+</body>
+</html>

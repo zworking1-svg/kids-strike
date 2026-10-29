@@ -116,6 +116,9 @@
   body.touch .screen { align-items:flex-start; overflow:auto; }
   body.touch .buyp { max-height:92vh; overflow:auto; } body.touch .buycol { min-width:170px; } body.touch .buycol button { font-size:16px; padding:8px 10px; }
   @media (max-width: 700px) { .panel { margin-left:0; } }
+  #paused { z-index:40; background:rgba(5,6,8,.55); pointer-events:none; }
+  .pausebox { margin:auto; text-align:center; font-size:64px; font-weight:700; letter-spacing:4px; color:#fff; text-shadow:0 3px 12px #000; }
+  .pausebox small { display:block; font-size:20px; letter-spacing:0; color:#d6dbe2; }
   #admin { background:rgba(5,6,8,.75); z-index:30; }
   .apanel { background:var(--panel); backdrop-filter:blur(8px); border-top:3px solid var(--accent); width:min(1100px,100%); max-height:94vh; overflow:auto; padding:18px 22px; user-select:text; }
   .ahead { display:flex; align-items:center; gap:14px; flex-wrap:wrap; } .ahead h2 { margin:0; font-size:28px; text-transform:uppercase; } .ahead button { margin-left:auto; }
@@ -172,6 +175,11 @@
         <button class="bots" data-n="4">4</button>
         <button class="bots" data-n="6">6</button>
       </div>
+      <label>Карта</label>
+      <div class="row">
+        <button class="mapb sel" data-map="dust">Пустыня</button>
+        <button class="mapb" data-map="mansion">Особняк (cs_mansion)</button>
+      </div>
     </div>
     <button class="main" id="go" disabled>Загрузка…</button>
     <div class="bar"><div id="loadbar"></div></div>
@@ -202,48 +210,12 @@
       Граната: зажми <b>ЛКМ</b> и отпусти — бросок далеко, <b>ПКМ</b> — под ноги<br>
       <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Деньги: убийство +$500, в голову +$1000, смерть — штраф.
     </div>
-    <button id="adminBtn" style="width:100%;margin-top:14px;display:none">⚙ Админ-панель</button>
+    <button id="adminBtn" style="width:100%;margin-top:14px;display:none">⚙ Открыть админ-панель (в новой вкладке)</button>
     <div class="err" id="err2"></div>
   </div>
 </div>
 
-<div id="admin" class="screen" style="display:none">
-  <div class="apanel">
-    <div class="ahead"><h2>⚙ Админ-панель</h2><span class="muted">изменения сразу действуют у всех игроков</span><button id="adminClose">Закрыть</button></div>
-    <div class="agrid">
-      <section><h3>Деньги</h3>
-        <label>Стартовые деньги, $<input type="number" data-cfg="startMoney" min="0" step="100"></label>
-        <label>За убийство, $<input type="number" data-cfg="killReward" min="0" step="50"></label>
-        <label>За убийство в голову, $<input type="number" data-cfg="headReward" min="0" step="50"></label>
-        <label>Штраф за смерть, $<input type="number" data-cfg="deathPenalty" min="0" step="50"></label>
-        <label>Максимум денег, $<input type="number" data-cfg="maxMoney" min="0" step="1000"></label>
-      </section>
-      <section><h3>Правила</h3>
-        <label>Убийств для победы<input type="number" data-cfg="winKills" min="1" max="500"></label>
-        <label>Возрождение через, сек<input type="number" data-cfg="respawn" min="0" max="30"></label>
-        <label class="chk"><input type="checkbox" data-cfg="loseWeapons"> Терять оружие при смерти</label>
-        <label class="chk"><input type="checkbox" data-cfg="buyAnywhere"> Покупать в любом месте карты</label>
-        <label class="chk"><input type="checkbox" data-cfg="infAmmo"> Бесконечные патроны</label>
-        <label class="chk"><input type="checkbox" data-cfg="ff"> Огонь по своим</label>
-        <label class="chk"><input type="checkbox" data-cfg="blood"> Кровь</label>
-        <label class="chk"><input type="checkbox" data-cfg="gore"> Отлетают части тела</label>
-        <label>Гранат в руках, максимум<input type="number" data-cfg="maxNades" min="0" max="10"></label>
-        <label>Сила гранаты, %<input type="number" data-cfg="nadePower" min="0" max="500" step="10"></label>
-      </section>
-      <section><h3>Боты</h3>
-        <button id="aBotCT">+ Бот за Спецназ</button>
-        <button id="aBotT">+ Бот за Террористов</button>
-        <button id="aBotsNone">Убрать всех ботов</button>
-        <label>Сложность<select data-cfg="botLevel"><option value="0">Лёгкие</option><option value="1">Нормальные</option><option value="2">Сложные</option></select></label>
-        <h3 style="margin-top:16px">Матч</h3>
-        <button id="aRestart">Новый матч (сбросить счёт и деньги)</button>
-        <button id="aDefaults">Вернуть настройки по умолчанию</button>
-      </section>
-      <section class="wide"><h3>Цены, $ <span class="muted">(оружие · магазин патронов)</span></h3><div id="aPrices" class="prices"></div></section>
-      <section class="wide"><h3>Игроки</h3><table id="aPlayers"></table></section>
-    </div>
-  </div>
-</div>
+<div id="paused" class="screen" style="display:none"><div class="pausebox">⏸ ПАУЗА<small>Админ поставил игру на паузу — подождите</small></div></div>
 
 <div id="rotate"><div>📱↻<br>Поверни телефон горизонтально</div></div>
 
@@ -339,7 +311,7 @@ const ITEM_NAME = { ...Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) =
 const DEFAULT_CFG = {
   startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
   winKills:25, respawn:3, ff:false, buyAnywhere:false, infAmmo:false, loseWeapons:true,
-  blood:true, gore:true, botLevel:1, maxNades:1, nadePower:100,
+  blood:true, gore:true, botLevel:1, maxNades:1, nadePower:100, map:'dust',
   prices: { ak47:2700, m4:2900, uzi:1200, shotgun:1050, dbshotgun:1400, sniper:4750, laser:4500, minigun:7000, launcher:5000, rpg:6500,
     deagle:700, beretta:300, kevlar:650, helmet:1000, grenade:300 },
   ammoPrices: { ak47:80, m4:80, uzi:50, shotgun:65, dbshotgun:50, sniper:125, laser:150, minigun:300, launcher:400, rpg:800, deagle:40, beretta:30 },
@@ -349,7 +321,7 @@ const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
 const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
 const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3;
-const PEER_PREFIX = 'kidstrike-v6-'; // bump when the network messages change, so old tabs can't join new games
+const PEER_PREFIX = 'kidstrike-v7-'; // bump when the network messages change, so old tabs can't join new games
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
 
 const $ = s => document.querySelector(s);
@@ -362,7 +334,7 @@ const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } ca
 
 // ================= menu =================
 let myName = store.get('ks-name', '');
-let myTeam = 'ct', botCount = 2;
+let myTeam = 'ct', botCount = 2, myMap = 'dust';
 $('#name').value = myName;
 if (joinCode) {
   $('#botRow').style.display = 'none';
@@ -373,6 +345,9 @@ document.querySelectorAll('.team').forEach(b => b.onclick = () => {
 });
 document.querySelectorAll('.bots').forEach(b => b.onclick = () => {
   document.querySelectorAll('.bots').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); botCount = +b.dataset.n;
+});
+document.querySelectorAll('.mapb').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.mapb').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); myMap = b.dataset.map;
 });
 let sens = +store.get('ks-sens', 1.6);
 $('#sens').value = sens;
@@ -553,6 +528,14 @@ const MAT = {
   blue:     pbr('blue', 2.5),
   concrete: pbr('concrete', 2),
 };
+// textures only the mansion uses: loaded the first time that map is played
+const LAZY_MAT = { mplaster: 2.5, parquet: 1.6, grass: 3, brick: 2, patio: 2 };
+const WALL_MAT = { mansion: 'mplaster', inner: 'mplaster', brick: 'brick' };
+function getMat(name) {
+  name = WALL_MAT[name] || name;
+  if (!MAT[name]) { MAT[name] = pbr(name, LAZY_MAT[name] || 2); if (name === 'grass') MAT[name].color.set(0x9cc870); } // a greener, well-kept lawn
+  return MAT[name];
+}
 
 // box with UVs in world units, so textures keep their real size on any box
 function boxGeo(w, h, d, tile) {
@@ -567,29 +550,69 @@ function boxGeo(w, h, d, tile) {
 }
 
 // ================= map =================
-// [x, z, width(x), depth(z), height, material, baseY]
-// the outer border can't be destroyed (it keeps everyone on the map)
-const MAP = [
-  [0,-40.5,82,1,7,'outer'], [0,40.5,82,1,7,'outer'], [-40.5,0,1,82,7,'outer'], [40.5,0,1,82,7,'outer'],
-];
-// everything else is built from blocks and can be shot through and blown up
-const WALLS = [
-  // the house in the middle: four walls around an empty yard
-  [0,-3.6,8,0.8,5,'wall'], [0,3.6,8,0.8,5,'wall'], [-3.6,0,0.8,6.4,5,'wall'], [3.6,0,0.8,6.4,5,'wall'],
-  [-20,-14,14,1.5,5,'wall'], [20,14,14,1.5,5,'wall'],
-  [-8,-23,1.5,10,5,'outer'], [8,23,1.5,10,5,'outer'],
-  [-26,6,1.5,16,5,'wall'], [26,-6,1.5,16,5,'wall'],
-  [12,-4,1.5,10,4,'blue'], [-12,4,1.5,10,4,'blue'],
-  [-31,23,10,1.5,4,'wall'], [31,-23,10,1.5,4,'wall'],
-  [-4,-28,10,1.5,2.2,'low'], [4,28,10,1.5,2.2,'low'],
-];
-// [x, z] spots for crate stacks
-const CRATES = [[-4,-14],[4,14],[16,-20],[-16,20],[-20,0],[20,0],[-33,-30],[33,30],[30,10],[-30,-10],[-14,-34],[14,34],[6,-8],[-6,8],[-1.4,-0.6]];
+// Each map: an outer border that can't be destroyed (it keeps everyone on the map), block walls that can be shot
+// through and blown up — [x, z, width(x), depth(z), height, material, openings] where an opening is
+// [from, to, bottom, top] in metres along the wall from its left/near end (doors and windows) — floors, props, spawns.
+const MAPS = {
+  dust: {
+    name: 'Пустыня', size: 82, borderH: 7, border: 'outer', ground: 'ground', groundMat: 'sand',
+    spawns: { ct: [0, -35], t: [0, 35] },
+    walls: [
+      // the house in the middle: four walls around an empty yard
+      [0,-3.6,8,0.8,5,'wall'], [0,3.6,8,0.8,5,'wall'], [-3.6,0,0.8,6.4,5,'wall'], [3.6,0,0.8,6.4,5,'wall'],
+      [-20,-14,14,1.5,5,'wall'], [20,14,14,1.5,5,'wall'],
+      [-8,-23,1.5,10,5,'outer'], [8,23,1.5,10,5,'outer'],
+      [-26,6,1.5,16,5,'wall'], [26,-6,1.5,16,5,'wall'],
+      [12,-4,1.5,10,4,'blue'], [-12,4,1.5,10,4,'blue'],
+      [-31,23,10,1.5,4,'wall'], [31,-23,10,1.5,4,'wall'],
+      [-4,-28,10,1.5,2.2,'low'], [4,28,10,1.5,2.2,'low'],
+    ],
+    navSkip: (x, z) => Math.abs(x) < 3.5 && Math.abs(z) < 3.5, // closed yard: reachable only through a blown hole
+    props: dustProps,
+  },
+  // cs_mansion (our own design): a white two-wing villa in a walled garden.
+  // Terrorists hold the house from the service yard behind it, counter-terrorists storm it from the front gate.
+  //   north (z−)  service yard (T spawn) — crates, barrels, fuel cans
+  //   middle      the villa 32×24 m: hall, living room (west), dining room (east), library, back corridor, bedroom
+  //   south (z+)  front garden: fountain, stone path, low brick walls for cover, garden tables (CT spawn at the gate)
+  //   sides       narrow side gardens with brick walls, a second way round to the side doors
+  mansion: {
+    name: 'Особняк', size: 70, borderH: 3.5, border: 'brick', ground: 'grass', groundMat: 'dirt',
+    spawns: { ct: [0, 30], t: [0, -30] },
+    walls: [
+      // outer walls of the villa: front door, back door, side doors, windows all round
+      [0, 2, 32, 0.6, 5, 'mansion', [[15,17,0,2.5],[3.5,5,1,2.5],[7,8.5,1,2.5],[11.5,13,1,2.5],[19,20.5,1,2.5],[23.5,25,1,2.5],[27,28.5,1,2.5]]],
+      [0,-22, 32, 0.6, 5, 'mansion', [[15,17,0,2.5],[4,5.5,1,2.5],[9.5,11,1,2.5],[21,22.5,1,2.5],[26.5,28,1,2.5]]],
+      [-16,-10, 0.6, 24, 5, 'mansion', [[4,5.5,1,2.5],[9,10.5,1,2.5],[14,15.5,1,2.5],[18,20,0,2.5]]],
+      [ 16,-10, 0.6, 24, 5, 'mansion', [[4,5.5,1,2.5],[9,10.5,1,2.5],[14,15.5,1,2.5],[18,20,0,2.5]]],
+      // inside: thinner partition walls with doorways
+      [-6, -4, 0.3, 12, 4, 'inner', [[6,8,0,2.3]]],             // hall | living room
+      [ 6, -4, 0.3, 12, 4, 'inner', [[6,8,0,2.3]]],             // hall | dining room
+      [0, -10, 32, 0.3, 4, 'inner', [[4,6,0,2.3],[15,17,0,2.3],[26,28,0,2.3]]], // front rooms | back rooms
+      [-4,-16, 0.3, 12, 4, 'inner', [[3,5,0,2.3]]],             // corridor | library
+      [ 4,-16, 0.3, 12, 4, 'inner', [[3,5,0,2.3]]],             // corridor | bedroom
+      // front garden: fountain and low brick walls to hide behind
+      [0, 14.4, 3.6, 0.4, 0.8, 'low'], [0, 17.6, 3.6, 0.4, 0.8, 'low'], [-1.6, 16, 0.4, 2.8, 0.8, 'low'], [1.6, 16, 0.4, 2.8, 0.8, 'low'],
+      [-9, 11, 6, 0.5, 1.2, 'brick'], [9, 11, 6, 0.5, 1.2, 'brick'],
+      [-13, 22, 0.5, 6, 1.2, 'brick'], [13, 22, 0.5, 6, 1.2, 'brick'],
+      [-6, 26, 4, 0.5, 1.2, 'brick'], [6, 26, 4, 0.5, 1.2, 'brick'],
+      // side gardens and the service yard
+      [-25, -8, 0.5, 12, 1.6, 'brick'], [25, -12, 0.5, 12, 1.6, 'brick'],
+      [-25, 8, 6, 0.5, 2.5, 'brick'], [25, 6, 6, 0.5, 2.5, 'brick'],
+      [-9, -27, 7, 0.5, 1.2, 'brick'], [9, -27, 7, 0.5, 1.2, 'brick'],
+    ],
+    floors: [[0, -10, 32, 24, 'parquet', 'wood'], [0, 18.5, 3, 31, 'patio', 'stone'], [0, -28, 30, 10, 'patio', 'stone']],
+    models: ['Sofa_01','ArmChair_01','CoffeeTable_01','WoodenTable_01','GothicBed_01','GothicCabinet_01','Shelf_01',
+      'potted_plant_01','potted_plant_04','dining_table','ClassicConsole_01','outdoor_table_chair_set_01','planter_box_01'],
+    props: mansionProps,
+  },
+};
+let mapId = 'dust', MAPDEF = MAPS.dust, mapLoading = false;
 
-// ---- how materials resist (real-life inspired): plaster/adobe is soft, sandstone is hard, the stone cap is in between
+// ---- how materials resist (real-life inspired): plaster/adobe is soft, sandstone and brick are hard, thin partitions are weak
 const CELL = 0.5;                                                          // wall block size, metres
-const WALL_HP = { wall: 260, blue: 240, outer: 420, low: 380, trim: 220 }; // what a block takes before it breaks
-const BLAST_HOLE = { wall: 2.7, blue: 2.7, outer: 2.0, low: 2.3 };       // hole radius from a grenade, metres (~3 grenades level a whole wall)
+const WALL_HP = { wall: 260, blue: 240, outer: 420, low: 380, trim: 220, mansion: 250, inner: 170, brick: 400 }; // what a block takes before it breaks
+const BLAST_HOLE = { wall: 2.7, blue: 2.7, outer: 2.0, low: 2.3, mansion: 2.7, inner: 3.1, brick: 2.1 }; // hole radius from a grenade, metres (~3 grenades level a whole wall)
 // bullet power against walls: bigger calibre chips more and breaks through sooner
 const PEN = { beretta: 14, uzi: 18, m4: 28, ak47: 38, deagle: 55, sniper: 140, shotgun: 8, dbshotgun: 9, laser: 45, minigun: 30, knife: 0 };
 // bullet hole size in metres: 9 mm < 5.56 < 7.62 < .50 AE < sniper round
@@ -597,31 +620,37 @@ const HOLE = { beretta: 0.045, uzi: 0.045, m4: 0.055, ak47: 0.07, minigun: 0.07,
 
 const walls = [];
 class Wall {
-  constructor(id, [x, z, w, d, h, type]) {
+  constructor(id, [x, z, w, d, h, type, openings = []]) {
     Object.assign(this, { id, x, z, w, d, h, type });
     this.along = w >= d ? 'x' : 'z';
     const L = Math.max(w, d);
     this.T = Math.min(w, d);
     this.n = Math.max(1, Math.round(L / CELL)); this.cl = L / this.n;          // columns along the wall
     this.m = Math.max(1, Math.round(h / CELL)); this.ch = h / this.m;          // rows of blocks
-    this.trim = type === 'wall' || type === 'blue';                            // stone cap on top
+    this.trim = type === 'wall' || type === 'blue' || type === 'mansion';      // stone cap on top
     this.R = this.m + (this.trim ? 1 : 0);
     const N = this.n * this.R;
     this.alive = new Uint8Array(N).fill(1);
+    // doors and windows are simply blocks that were never there
+    for (const [a0, a1, y0, y1] of openings) for (let c = 0; c < this.n * this.m; c++) {
+      const ac = (this.col(c) + 0.5) * this.cl, yc = (this.row(c) + 0.5) * this.ch;
+      if (ac > a0 && ac < a1 && yc > y0 && yc < y1) this.alive[c] = 0;
+    }
     this.hp = new Float32Array(N);
     for (let c = 0; c < N; c++) this.hp[c] = this.row(c) === this.m ? WALL_HP.trim : WALL_HP[type];
     this.decals = new Map(); // block -> bullet holes on it
     this.boxes = [];
     // one instanced mesh for the wall blocks, one for the cap
-    this.meshes = [this.makeMesh(this.n * this.m, MAT[type]), this.trim ? this.makeMesh(this.n, MAT.concrete) : null];
+    this.meshes = [this.makeMesh(this.n * this.m, getMat(type)), this.trim ? this.makeMesh(this.n, MAT.concrete) : null];
     this.inst = [[], []]; this.slot = new Int32Array(N).fill(-1);
     const mtx = new THREE.Matrix4(), white = new THREE.Color(1, 1, 1);
     for (let c = 0; c < N; c++) {
+      if (!this.alive[c]) continue;
       const k = this.row(c) === this.m ? 1 : 0, im = this.meshes[k];
       this.slot[c] = this.inst[k].length; this.inst[k].push(c);
       im.setMatrixAt(this.slot[c], this.cellMatrix(c, mtx)); im.setColorAt(this.slot[c], white);
     }
-    for (const im of this.meshes) if (im) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.computeBoundingBox(); }
+    for (let k = 0; k < 2; k++) { const im = this.meshes[k]; if (!im) continue; im.count = this.inst[k].length; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.computeBoundingBox(); }
     this.rebuildColliders();
   }
   makeMesh(count, mat) {
@@ -749,9 +778,10 @@ class Wall {
 
 // ---- props that can be shot or blown apart
 const props = [];
-const PROP_KIND = { wooden_military_crate:'crate', wooden_crate_02:'crate', barrel_03:'barrel', metal_jerrycan:'jerrycan', cardboard_box_01:'cardboard', door:'door' };
-const PROP_HP = { crate: 260, cardboard: 30, jerrycan: 25, barrel: Infinity, door: 220 };
-const PROP_MAT = { crate:'wood', cardboard:'cardboard', jerrycan:'metal', barrel:'metal', door:'wood' };
+const PROP_KIND = { wooden_military_crate:'crate', wooden_crate_02:'crate', barrel_03:'barrel', metal_jerrycan:'jerrycan', cardboard_box_01:'cardboard', door:'door',
+  potted_plant_01:'plant', potted_plant_04:'plant', planter_box_01:'plant' };
+const PROP_HP = { crate: 260, cardboard: 30, jerrycan: 25, barrel: Infinity, door: 220, furniture: 200, plant: 40 };
+const PROP_MAT = { crate:'wood', cardboard:'cardboard', jerrycan:'metal', barrel:'metal', door:'wood', furniture:'wood', plant:'cardboard' };
 // box = its collision box when solid; non-solid props still get a box for blast checks
 function registerProp(obj, kind, box) {
   const id = props.length;
@@ -761,10 +791,7 @@ function registerProp(obj, kind, box) {
     pos0: obj.position.clone(), rot0: obj.rotation.clone(), scale0: obj.scale.clone() });
   obj.traverse(c => { if (c.isMesh) c.userData = { prop: id, mat: PROP_MAT[kind] }; });
 }
-const SPAWNS = { ct: [], t: [] };
-for (let i = -3; i <= 3; i++) { SPAWNS.ct.push([i*3, -35]); SPAWNS.t.push([i*3, 35]); }
-
-const colliders = [], worldMeshes = [];
+const colliders = [], worldMeshes = [], mapObjects = [];
 function addCollider(obj) {
   obj.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(obj);
@@ -772,31 +799,48 @@ function addCollider(obj) {
   return b;
 }
 function buildMap() {
-  const ground = new THREE.Mesh(boxGeo(82, 0.2, 82, MAT.ground.userData.tile), MAT.ground);
-  ground.position.y = -0.1; ground.receiveShadow = true; ground.userData = { mat: 'sand' };
-  scene.add(ground); worldMeshes.push(ground);
-  for (const [x, z, w, d, h, type, y0 = 0] of MAP) {
-    const m = new THREE.Mesh(boxGeo(w, h, d, MAT[type].userData.tile), MAT[type]);
-    m.position.set(x, y0 + h/2, z); m.castShadow = m.receiveShadow = true; m.userData = { mat: 'stone', border: true };
-    scene.add(m); worldMeshes.push(m);
+  const D = MAPDEF, S = D.size, half = S / 2;
+  const ground = new THREE.Mesh(boxGeo(S, 0.2, S, 4), getMat(D.ground));
+  ground.position.y = -0.1; ground.receiveShadow = true; ground.userData = { mat: D.groundMat, ground: true };
+  scene.add(ground); worldMeshes.push(ground); mapObjects.push(ground);
+  for (const [x, z, w, d] of [[0, -half - 0.5, S + 2, 1], [0, half + 0.5, S + 2, 1], [-half - 0.5, 0, 1, S + 2], [half + 0.5, 0, 1, S + 2]]) {
+    const m = new THREE.Mesh(boxGeo(w, D.borderH, d, 3), getMat(D.border));
+    m.position.set(x, D.borderH / 2, z); m.castShadow = m.receiveShadow = true; m.userData = { mat: 'stone', border: true };
+    scene.add(m); worldMeshes.push(m); mapObjects.push(m);
     addCollider(m);
   }
-  WALLS.forEach((def, i) => walls.push(new Wall(i, def)));
-  // blue doors on the long walls
-  for (const [x, z, rot] of [[-20,-13.2,0],[20,13.2,Math.PI],[-25.2,6,Math.PI/2],[25.2,-6,-Math.PI/2]]) {
-    const door = new THREE.Mesh(boxGeo(2.2, 3.2, 0.12, 2.5), MAT.blue);
-    door.position.set(x, 1.6, z); door.rotation.y = rot; door.castShadow = door.receiveShadow = true;
-    scene.add(door); worldMeshes.push(door);
-    registerProp(door, 'door', null);
+  D.walls.forEach((def, i) => walls.push(new Wall(i, def)));
+  // floors laid on the ground: parquet inside the villa, stone paths outside (they stop bullets like the ground)
+  for (const [x, z, w, d, mat, kind] of D.floors || []) {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), getMat(mat));
+    f.rotation.x = -Math.PI / 2; f.position.set(x, 0.012, z); f.receiveShadow = true; f.userData = { mat: kind, ground: true };
+    scene.add(f); worldMeshes.push(f); mapObjects.push(f);
   }
   const place = (name, scale, x, y, z, rotY = 0, solid = true) => {
     const o = MODELS[name].clone(true);
     o.scale.setScalar(scale); o.position.set(x, y, z); o.rotation.y = rotY;
     o.traverse(c => { if (c.isMesh) { c.castShadow = c.receiveShadow = true; worldMeshes.push(c); } });
     scene.add(o);
-    registerProp(o, PROP_KIND[name], solid ? addCollider(o) : null);
+    registerProp(o, PROP_KIND[name] || 'furniture', solid ? addCollider(o) : null);
     return o;
   };
+  D.props(place);
+  // spawn zones marked on the floor
+  for (const team of ['ct','t']) {
+    const [cx, cz] = D.spawns[team];
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(24, 6), new THREE.MeshBasicMaterial({ color: team === 'ct' ? 0x3a7bd5 : 0xd9822b, transparent:true, opacity:.18, depthWrite:false }));
+    m.rotation.x = -Math.PI/2; m.position.set(cx, 0.03, cz); scene.add(m); mapObjects.push(m);
+  }
+}
+// the desert: crate stacks, barrels, blue doors, fuel cans and boxes
+function dustProps(place) {
+  for (const [x, z, rot] of [[-20,-13.2,0],[20,13.2,Math.PI],[-25.2,6,Math.PI/2],[25.2,-6,-Math.PI/2]]) {
+    const door = new THREE.Mesh(boxGeo(2.2, 3.2, 0.12, 2.5), MAT.blue);
+    door.position.set(x, 1.6, z); door.rotation.y = rot; door.castShadow = door.receiveShadow = true;
+    scene.add(door); worldMeshes.push(door);
+    registerProp(door, 'door', null);
+  }
+  const CRATES = [[-4,-14],[4,14],[16,-20],[-16,20],[-20,0],[20,0],[-33,-30],[33,30],[30,10],[-30,-10],[-14,-34],[14,34],[6,-8],[-6,8],[-1.4,-0.6]];
   CRATES.forEach(([x, z], i) => {
     const rot = i % 2 ? Math.PI/2 : 0;
     place('wooden_military_crate', 1.8, x, 0, z, rot);
@@ -808,11 +852,75 @@ function buildMap() {
   const deco = [['metal_jerrycan',1.6,-38.6,-20,0.4],['metal_jerrycan',1.6,38.6,20,2.1],['cardboard_box_01',2.2,-25,9,0.3],['cardboard_box_01',2.2,25,-9,2],
     ['metal_jerrycan',1.6,1.5,-4.9,0],['metal_jerrycan',1.6,-1.5,4.9,3.1],['cardboard_box_01',2.2,-36,36,0.8],['cardboard_box_01',2.2,36,-36,2.2]];
   for (const [n, s, x, z, r] of deco) place(n, s, x, 0, z, r, false);
-  // spawn zones marked on the floor
-  for (const team of ['ct','t']) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(24, 6), new THREE.MeshBasicMaterial({ color: team === 'ct' ? 0x3a7bd5 : 0xd9822b, transparent:true, opacity:.18, depthWrite:false }));
-    m.rotation.x = -Math.PI/2; m.position.set(0, 0.02, team === 'ct' ? -35 : 35); scene.add(m);
+}
+// the mansion: furnished rooms, a garden and a service yard (furniture is real-world size, scale 1)
+function mansionProps(place) {
+  const P = Math.PI, H = Math.PI / 2;
+  // living room (west front): sofa facing a coffee table, two armchairs, plants
+  place('Sofa_01', 1, -11, 0, 0.6, P); place('CoffeeTable_01', 1, -11, 0, -1.6);
+  place('ArmChair_01', 1, -14, 0, -3.5, H); place('ArmChair_01', 1, -8, 0, -3.5, -H);
+  place('Shelf_01', 1, -15.4, 0, -7.5, H); place('potted_plant_01', 1, -15, 0, 1, 0, false); place('potted_plant_04', 1, -7, 0, -9, 0, false);
+  // hall: console under the stairs wall, big plants by the doors
+  place('ClassicConsole_01', 1, 0, 0, -9.5); place('potted_plant_04', 1, -4.8, 0, 1, 0, false); place('potted_plant_04', 1, 4.8, 0, 1, 0, false);
+  place('potted_plant_01', 1, -4.8, 0, -9, 0, false); place('potted_plant_01', 1, 4.8, 0, -9, 0, false);
+  // dining room (east front): long table, cabinets
+  place('dining_table', 1, 11, 0, -4, H); place('GothicCabinet_01', 1, 15.4, 0, -7.5, -H); place('GothicCabinet_01', 1, 15.4, 0, 0, -H);
+  place('potted_plant_01', 1, 7, 0, 1, 0, false);
+  // library (west back): shelves along the walls, reading table, armchair
+  for (const x of [-14.5, -12, -9.5, -7]) place('Shelf_01', 1, x, 0, -21.4);
+  place('Shelf_01', 1, -15.4, 0, -14, H); place('WoodenTable_01', 1, -10, 0, -15.5); place('ArmChair_01', 1, -7, 0, -13, P);
+  // back corridor: plants only, it's the way through
+  place('potted_plant_04', 1, -3, 0, -21, 0, false); place('potted_plant_04', 1, 3, 0, -21, 0, false);
+  // bedroom (east back): bed, cabinet, console, armchair
+  place('GothicBed_01', 1, 11, 0, -19.5); place('GothicCabinet_01', 1, 15.4, 0, -13, -H); place('ClassicConsole_01', 1, 6, 0, -21.4);
+  place('ArmChair_01', 1, 6.5, 0, -12.5, P);
+  // front garden: garden tables, planters along the path, plants by the door
+  place('outdoor_table_chair_set_01', 1, -20, 0, 18); place('outdoor_table_chair_set_01', 1, 20, 0, 18, P);
+  for (const z of [6, 9, 22, 25]) { place('planter_box_01', 1, -2.6, 0, z, H, false); place('planter_box_01', 1, 2.6, 0, z, H, false); }
+  place('potted_plant_04', 1, -2, 0, 3, 0, false); place('potted_plant_04', 1, 2, 0, 3, 0, false);
+  // side gardens
+  place('outdoor_table_chair_set_01', 1, -29, 0, -2); place('potted_plant_01', 1, 29, 0, 2, 0, false);
+  // service yard behind the house: crates, barrels and fuel cans (careful with those)
+  for (const [x, z, rot] of [[-14,-30,0],[14,-30,H],[-22,-24,H],[22,-25,0],[-3,-32.5,0]]) {
+    place('wooden_military_crate', 1.8, x, 0, z, rot);
+    place('wooden_military_crate', 1.8, x + 0.15, 0.78, z + 0.1, rot);
   }
+  for (const [x, z] of [[-17,-33],[17,-33],[-28,-30],[28,-30]]) place('barrel_03', 1.15, x, 0, z);
+  for (const [x, z] of [[-18,-24],[18,-24],[6,-33]]) place('metal_jerrycan', 1.6, x, 0, z, 0.5, false);
+  place('cardboard_box_01', 2.2, -26, 0, -33, 0.3, false); place('cardboard_box_01', 2.2, 26, 0, -33, 2, false);
+}
+// throws the current map away: walls, props, floors, rubble, decals
+function clearMap() {
+  for (const o of mapObjects) scene.remove(o);
+  mapObjects.length = 0;
+  for (const w of walls) { for (const im of w.meshes) if (im) scene.remove(im); for (const list of w.decals.values()) for (const d of list) scene.remove(d); }
+  walls.length = 0;
+  for (const p of props) { scene.remove(p.obj); for (const d of p.decals || []) scene.remove(d); }
+  props.length = 0;
+  colliders.length = 0; worldMeshes.length = 0; NAV.length = 0;
+  for (const o of [...debris, ...movers]) scene.remove(o.mesh);
+  debris.length = 0; movers.length = 0;
+  for (const h of holes) scene.remove(h); holes.length = 0;
+  for (const s of splats) scene.remove(s); splats.length = 0;
+  for (const f of fires) scene.remove(f.light); fires.length = 0;
+  for (const n of clientNades.values()) scene.remove(n.obj); clientNades.clear();
+}
+// switch to another map; its models and textures are downloaded the first time it is played.
+// While that happens, messages about the world (holes, explosions…) wait in a queue.
+const pendingWorld = [];
+const lazyGltf = new GLTFLoader();
+async function switchMap(id) {
+  if (!MAPS[id] || (id === mapId && walls.length)) return;
+  mapLoading = true;
+  showCenter('<small>Загрузка карты «' + MAPS[id].name + '»…</small>', 9999);
+  await Promise.all((MAPS[id].models || []).filter(n => !MODELS[n]).map(n =>
+    lazyGltf.loadAsync(`assets/models/${n}/${n}.gltf`).then(g => { MODELS[n] = g.scene; }).catch(() => { MODELS[n] = new THREE.Group(); })));
+  clearMap();
+  mapId = id; MAPDEF = MAPS[id];
+  buildMap(); buildNav();
+  mapLoading = false;
+  showCenter('', 0);
+  while (pendingWorld.length) clientHandle(pendingWorld.shift());
 }
 
 // ================= physics =================
@@ -1533,6 +1641,7 @@ class Cloud {
 const CHIPS = {
   stone: new Cloud(500, 0xc9b48e, 0.05, false, 9.8),
   sand:  new Cloud(200, 0xc8a774, 0.04, false, 9.8),
+  dirt:  new Cloud(200, 0x5e4a2e, 0.04, false, 9.8),
   wood:  new Cloud(300, 0x8a5a30, 0.05, false, 9.8),
   paper: new Cloud(150, 0xa8875a, 0.06, false, 3),
   spark: new Cloud(300, new THREE.Color(5, 3.2, 1.2), 0.045, true, 9.8),
@@ -1566,7 +1675,7 @@ const HOLE_TEX = {
     g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 22, 0, 6.28); g.fill();
   }),
 };
-HOLE_TEX.cardboard = HOLE_TEX.wood; HOLE_TEX.sand = HOLE_TEX.stone;
+HOLE_TEX.cardboard = HOLE_TEX.wood; HOLE_TEX.sand = HOLE_TEX.stone; HOLE_TEX.dirt = HOLE_TEX.stone;
 const HOLE_MAT = Object.fromEntries(Object.entries(HOLE_TEX).map(([k, t]) => [k, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })]));
 const holeGeo = new THREE.PlaneGeometry(1, 1);
 const holes = [];
@@ -1575,7 +1684,7 @@ const _v = new THREE.Vector3();
 function impactAt(hit, w, dir) {
   const ud = hit.object.userData || {}, mat = ud.mat || 'stone';
   const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize() : dir.clone().negate();
-  const size = (HOLE[w] || 0.05) * (0.85 + Math.random() * 0.3) * (mat === 'sand' ? 2.2 : mat === 'metal' ? 0.8 : 1);
+  const size = (HOLE[w] || 0.05) * (0.85 + Math.random() * 0.3) * (mat === 'sand' || mat === 'dirt' ? 2.2 : mat === 'metal' ? 0.8 : 1);
   const d = new THREE.Mesh(holeGeo, HOLE_MAT[mat] || HOLE_MAT.stone);
   d.position.copy(hit.point).addScaledVector(n, 0.012);
   d.lookAt(_v.copy(hit.point).add(n)); d.rotation.z = Math.random() * 6.28; d.scale.setScalar(size * 4);
@@ -1587,7 +1696,7 @@ function impactAt(hit, w, dir) {
   const power = (PEN[w] || 20) / 30, out = n.clone().multiplyScalar(0.7).addScaledVector(dir, -0.3).normalize();
   if (mat === 'metal') { CHIPS.spark.spawn(hit.point, out, 6 + power * 6, 4, 2.5, 0.4); }
   else if (mat === 'wood' || mat === 'cardboard') { CHIPS[mat === 'wood' ? 'wood' : 'paper'].spawn(hit.point, out, 4 + power * 6, 3, 1.5); dustPuff(hit.point); }
-  else { CHIPS[mat === 'sand' ? 'sand' : 'stone'].spawn(hit.point, out, 5 + power * 8, 3.5, 1.8); dustPuff(hit.point); }
+  else { CHIPS[mat === 'sand' || mat === 'dirt' ? mat : 'stone'].spawn(hit.point, out, 5 + power * 8, 3.5, 1.8); dustPuff(hit.point); }
   const dist = hit.point.distanceTo(camera.position);
   if (dist < 25) playImpact(mat, 0.5 / (1 + dist * 0.25));
 }
@@ -1603,7 +1712,7 @@ function playImpact(mat, vol) {
 
 // ---- flying and falling pieces with simple physics: gravity, bounce, friction, coming to rest
 const debris = [];
-const ROCK_COLOR = { wall: 0xcbb894, blue: 0x7f9bb8, outer: 0xc4a678, low: 0xd8c49a, trim: 0x9a9690 };
+const ROCK_COLOR = { wall: 0xcbb894, blue: 0x7f9bb8, outer: 0xc4a678, low: 0xd8c49a, trim: 0x9a9690, mansion: 0xe9e5dc, inner: 0xe9e5dc, brick: 0x9a4a35 };
 const rockMats = {};
 const rockMat = type => rockMats[type] ||= new THREE.MeshStandardMaterial({ color: ROCK_COLOR[type] || 0xbbbbbb, roughness: 0.95, flatShading: true });
 function addDebris(mesh, vel, spin, opts = {}) {
@@ -1714,7 +1823,7 @@ function propFX(p, m) {
   const blast = m.how === 'blast';
   const R = () => (Math.random() - .5);
   let woodMat = null; p.obj.traverse(c => { if (c.isMesh && !woodMat) woodMat = c.material; });
-  if (m.act === 'break' && (p.kind === 'crate' || p.kind === 'door')) {
+  if (m.act === 'break' && (p.kind === 'crate' || p.kind === 'door' || p.kind === 'furniture')) {
     scene.remove(p.obj);
     const n = p.kind === 'door' ? 7 : 12;
     for (let i = 0; i < n; i++) {
@@ -1725,7 +1834,7 @@ function propFX(p, m) {
     }
     CHIPS.wood.spawn(ctr, away, 40, blast ? 8 : 3, 3);
     dustPuff(ctr); playWoodBreak(ctr);
-  } else if (m.act === 'break' && p.kind === 'cardboard') {
+  } else if (m.act === 'break' && (p.kind === 'cardboard' || p.kind === 'plant')) {
     scene.remove(p.obj);
     for (let i = 0; i < 8; i++) {
       const sheet = new THREE.Mesh(new THREE.PlaneGeometry(0.2 + Math.random() * 0.2, 0.15 + Math.random() * 0.2), woodMat);
@@ -1918,7 +2027,7 @@ function hostBlast(at, from, { power = 1, radius = NADE.radius, w = 'grenade', n
   for (const p of props) {
     if (!p.alive) continue;
     const d = p.box.distanceToPoint(at);
-    const reach = { crate: 2.6, door: 2.8, cardboard: 4.5, barrel: 3.5, jerrycan: 4.5 }[p.kind] * scale;
+    const reach = { crate: 2.6, door: 2.8, cardboard: 4.5, barrel: 3.5, jerrycan: 4.5, furniture: 2.8, plant: 4.5 }[p.kind] * scale;
     if (d < reach) hostBreakProp(p, [at.x, at.y, at.z], 'blast', from);
     else if (d < radius && p.hp !== Infinity) { p.hp -= 200 * pw * (1 - d / radius); if (p.hp <= 0) hostBreakProp(p, [at.x, at.y, at.z], 'blast', from); }
   }
@@ -1930,7 +2039,7 @@ function resetWorld() {
     for (const b of w.boxes) { const i = colliders.indexOf(b); if (i >= 0) colliders.splice(i, 1); }
     for (const list of w.decals.values()) for (const d of list) scene.remove(d);
   }
-  walls.splice(0, walls.length, ...WALLS.map((def, i) => new Wall(i, def)));
+  walls.splice(0, walls.length, ...MAPDEF.walls.map((def, i) => new Wall(i, def)));
   for (const p of props) {
     if (!p.obj.parent) scene.add(p.obj);
     p.obj.position.copy(p.pos0); p.obj.rotation.copy(p.rot0); p.obj.scale.copy(p.scale0);
@@ -2125,10 +2234,10 @@ function giveWeapon(k) { me.ammo[k] = WEAPONS[k].mag; me.reserve[k] = WEAPONS[k]
 function resetLoadout() { me.loadout = { 1:null, 2:START_PISTOL, 3:'knife', 4:null }; me.nades = 0; giveWeapon(START_PISTOL); me.weapon = START_PISTOL; }
 giveWeapon(START_PISTOL);
 const keys = {};
-let myId = null, started = false, locked = false, showBoard = false;
+let myId = null, started = false, locked = false, showBoard = false, gamePaused = false;
 
 // ================= networking =================
-let peer = null, isHost = false, hostConn = null;
+let peer = null, isHost = false, hostConn = null, roomCode = '';
 const conns = new Map();      // host: peerId -> DataConnection
 const remotes = new Map();    // everyone: id -> { avatar, name, team, target, ry, alive, k, d, hp }
 let teamScore = { ct:0, t:0 };
@@ -2148,12 +2257,14 @@ function startHost() {
   isHost = true;
   const code = randCode();
   peer = new Peer(PEER_PREFIX + code, { debug: 1 });
-  peer.on('open', id => {
-    myId = id;
+  peer.on('open', async id => {
+    myId = id; roomCode = code;
     const url = location.origin + location.pathname + '?room=' + code;
     $('#link').value = url;
     $('#roomtag').textContent = 'Комната: ' + code;
     loadCfg();
+    cfg.map = myMap; store.set('ks-cfg', JSON.stringify(cfg));
+    await switchMap(cfg.map);
     $('#adminBtn').style.display = 'block';
     $('#goal').textContent = 'до ' + cfg.winKills;
     for (let i = 0; i < botCount; i++) addBot(i % 2 === 0 ? (myTeam === 'ct' ? 't' : 'ct') : myTeam);
@@ -2162,9 +2273,14 @@ function startHost() {
   });
   peer.on('connection', conn => {
     conn.on('open', () => conns.set(conn.peer, conn));
-    conn.on('data', d => hostHandle(conn.peer, d));
-    conn.on('close', () => hostRemove(conn.peer));
-    conn.on('error', () => hostRemove(conn.peer));
+    conn.on('data', d => {
+      if (d?.t === 'admHello') return adminHello(conn, d);
+      if (admins.has(conn.peer)) return adminCommand(d);
+      hostHandle(conn.peer, d);
+    });
+    const gone = () => { if (!admins.delete(conn.peer)) hostRemove(conn.peer); };
+    conn.on('close', gone);
+    conn.on('error', gone);
   });
   peer.on('error', e => {
     if (e.type === 'unavailable-id') { peer.destroy(); startHost(); return; }
@@ -2198,11 +2314,11 @@ function startClient() {
 function showErr(t) { $('#err').textContent = t; $('#err2').textContent = t; }
 
 // ================= HOST: authoritative game state =================
-const H = { players: new Map(), bots: [], snapTimer: 0, winLock: false };
+const H = { players: new Map(), bots: [], snapTimer: 0, winLock: false, paused: false };
 
 function pickSpawn(team) {
-  const s = SPAWNS[team][Math.floor(Math.random()*SPAWNS[team].length)];
-  return [s[0] + (Math.random()-.5)*1.5, 0, s[1] + (Math.random()-.5)*1.5];
+  const [cx, cz] = MAPDEF.spawns[team];
+  return [cx + (Math.floor(Math.random() * 7) - 3) * 3 + (Math.random()-.5)*1.5, 0, cz + (Math.random()-.5)*1.5];
 }
 function hostSend(id, msg) {
   if (id === myId) clientHandle(msg);
@@ -2224,7 +2340,8 @@ function hostSpawn(p) {
 }
 // buying works only near your own team's spawn, like the buy zone in CS (unless the admin allows it everywhere)
 function inBuyZone(team, pos) {
-  return cfg.buyAnywhere || (Math.abs(pos[0]) < 14 && Math.abs(pos[2] - (team === 'ct' ? -35 : 35)) < 8);
+  const [cx, cz] = MAPDEF.spawns[team];
+  return cfg.buyAnywhere || (Math.abs(pos[0] - cx) < 14 && Math.abs(pos[2] - cz) < 8);
 }
 const LIMB_FACTOR = { head:1, body:1, larm:1, rarm:1, lleg:0.75, rleg:0.75 };
 function hostHandle(from, m) {
@@ -2235,12 +2352,14 @@ function hostHandle(from, m) {
     H.players.set(from, p);
     hostSend(from, { t:'cfg', cfg });
     if (from !== myId) hostSend(from, worldState()); // someone joining later sees the ruins that are already there
+    if (H.paused) hostSend(from, { t:'pause', on: true });
     hostSpawn(p);
     hostBroadcast({ t:'info', text: p.name + ' зашёл за команду «' + TEAM_NAME[p.team] + '»' });
     adminRefresh();
     return;
   }
   const p = H.players.get(from); if (!p) return;
+  if (H.paused && m.t !== 'st') return; // during a pause nothing is shot, thrown or bought
   if (m.t === 'st') { if (p.alive) { p.p = m.p; p.ry = m.ry; p.rx = m.rx; p.w = m.w; } }
   else if (m.t === 'shot') {
     if (!p.alive) return;
@@ -2317,7 +2436,7 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
       H.winLock = true;
       hostBroadcast({ t:'win', team: a.team });
       setTimeout(() => hostRestart('Новый матч!'), 6000);
-    } else setTimeout(() => { if (H.players.get(v.id) === v && !H.winLock && !v.alive) hostSpawn(v); }, cfg.respawn * 1000);
+    } else whenRunning(() => { if (H.players.get(v.id) === v && !H.winLock && !v.alive) hostSpawn(v); }, cfg.respawn * 1000);
   }
 }
 // new match: scores and money back to the start
@@ -2336,6 +2455,11 @@ function hostThrow(from, o, v) {
   hostBroadcast({ t:'nade', nid, id: from, o, v });
 }
 function hostTick(dt) {
+  if (H.paused || mapLoading) { // frozen: only keep telling everyone where things are
+    H.snapTimer -= dt;
+    if (H.snapTimer <= 0) { H.snapTimer = 0.05; sendSnap(); }
+    return;
+  }
   for (const b of H.bots) botThink(b, dt);
   for (let i = hostNades.length - 1; i >= 0; i--) {
     const n = hostNades[i];
@@ -2349,13 +2473,13 @@ function hostTick(dt) {
   }
   hostFireTick(dt);
   H.snapTimer -= dt;
-  if (H.snapTimer <= 0) {
-    H.snapTimer = 0.05;
-    const r = v => Math.round(v * 100) / 100;
-    const pl = [];
-    for (const p of H.players.values()) pl.push([p.id, p.name, p.team, r(p.p[0]), r(p.p[1]), r(p.p[2]), r(p.ry), r(p.rx), p.hp, p.alive ? 1 : 0, p.k, p.d, p.w, p.money, p.armor]);
-    hostBroadcast({ t:'snap', pl });
-  }
+  if (H.snapTimer <= 0) { H.snapTimer = 0.05; sendSnap(); }
+}
+function sendSnap() {
+  const r = v => Math.round(v * 100) / 100;
+  const pl = [];
+  for (const p of H.players.values()) pl.push([p.id, p.name, p.team, r(p.p[0]), r(p.p[1]), r(p.p[2]), r(p.ry), r(p.rx), p.hp, p.alive ? 1 : 0, p.k, p.d, p.w, p.money, p.armor]);
+  hostBroadcast({ t:'snap', pl });
 }
 
 // ---------- admin panel (only the creator of the game, who is also the host, has it)
@@ -2371,45 +2495,74 @@ function pushCfg() {
   store.set('ks-cfg', JSON.stringify(cfg));
   hostBroadcast({ t:'cfg', cfg });
 }
-function toggleAdmin(open) {
-  if (!isHost) return;
-  adminOpen = open;
-  $('#admin').style.display = open ? 'flex' : 'none';
-  if (open) { if (locked) document.exitPointerLock(); $('#pause').style.display = 'none'; fillAdmin(); }
-  else $('#pause').style.display = started && !locked ? 'flex' : 'none';
-}
-function fillAdmin() {
-  document.querySelectorAll('#admin [data-cfg]').forEach(el => {
-    const v = cfg[el.dataset.cfg];
-    if (el.type === 'checkbox') el.checked = v; else el.value = v;
-  });
-  const row =(key, name) => `<label>${name}<span><input type="number" min="0" step="50" data-price="${key}" value="${cfg.prices[key]}">` +
-    (cfg.ammoPrices[key] !== undefined ? ` <input type="number" min="0" step="5" data-ammo="${key}" value="${cfg.ammoPrices[key]}" title="магазин патронов">` : '') + `</span></label>`;
-  $('#aPrices').innerHTML = [...BUY, 'kevlar', 'helmet', 'grenade'].map(k => row(k, ITEM_NAME[k])).join('');
-  document.querySelectorAll('#aPrices input').forEach(el => el.onchange = () => {
-    const v = Math.max(0, Math.round(+el.value || 0));
-    if (el.dataset.price) cfg.prices[el.dataset.price] = v; else cfg.ammoPrices[el.dataset.ammo] = v;
-    pushCfg();
-  });
+// The admin panel is its own page (admin/), opened from the pause menu. It connects to this game like a player,
+// proves it is the admin with a secret key that only the creator's computer knows, and sends commands.
+const admins = new Map();
+const adminKey = store.get('ks-admin-key', null) || (() => { const k = randCode() + randCode(); store.set('ks-admin-key', k); return k; })();
+function adminUrl() { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'admin/?room=' + roomCode + '&key=' + adminKey; }
+function adminHello(conn, m) {
+  if (m.key !== adminKey) { conn.send({ t:'admNo' }); setTimeout(() => conn.close(), 300); return; }
+  conns.delete(conn.peer); admins.set(conn.peer, conn);
+  conn.send({ t:'admOk' });
   adminRefresh();
 }
+function adminState() {
+  return { t:'admState', room: roomCode, paused: H.paused, cfg, map: mapId,
+    maps: Object.entries(MAPS).map(([id, d]) => [id, d.name]),
+    items: [...BUY, 'kevlar', 'helmet', 'grenade'].map(k => [k, ITEM_NAME[k]]),
+    players: [...H.players.values()].map(p => ({ id: p.id, name: p.name, team: p.team, money: p.money, k: p.k, d: p.d, bot: !!p.bot, alive: p.alive, hp: p.hp, me: p.id === myId })) };
+}
 function adminRefresh() {
-  if (!adminOpen) return;
-  // people first, then bots
-  const rows = [...H.players.values()].sort((a, b) => (a.bot ? 1 : 0) - (b.bot ? 1 : 0));
-  $('#aPlayers').innerHTML = rows.map(p => `<tr><td class="n-${p.team}">${p.bot ? '🤖 ' : ''}${esc(p.name)}${p.id === myId ? ' (ты)' : ''}</td><td>${TEAM_NAME[p.team]}</td>` +
-    `<td style="color:#7ee787">${p.bot ? '' : '$' + p.money}</td><td>${p.k} / ${p.d}</td><td style="text-align:right">` +
-    (p.bot ? '' : `<button data-act="give" data-id="${p.id}">+$1000</button><button data-act="take" data-id="${p.id}">−$1000</button>` +
-      `<button data-act="zero" data-id="${p.id}">$0</button>`) +
-    `<button data-act="team" data-id="${p.id}">Сменить команду</button>` +
-    (p.bot ? `<button data-act="remove" data-id="${p.id}">Удалить</button>` : p.id === myId ? '' : `<button data-act="kick" data-id="${p.id}">Выгнать</button>`) + `</td></tr>`).join('');
-  document.querySelectorAll('#aPlayers [data-act]').forEach(b => b.onclick = () => adminAction(b.dataset.act, b.dataset.id));
+  if (!admins.size) return;
+  const s = adminState();
+  for (const c of admins.values()) if (c.open) c.send(s);
+}
+const CFG_BOOL = ['ff', 'buyAnywhere', 'infAmmo', 'loseWeapons', 'blood', 'gore'];
+async function adminCommand(m) {
+  const int = v => Math.max(0, Math.round(+v || 0));
+  switch (m.cmd) {
+    case 'cfg':
+      if (!(m.key in DEFAULT_CFG) || m.key === 'map' || m.key === 'prices' || m.key === 'ammoPrices') break;
+      cfg[m.key] = CFG_BOOL.includes(m.key) ? !!m.value : int(m.value);
+      if (m.key === 'winKills') cfg.winKills = Math.max(1, cfg.winKills);
+      if (m.key === 'botLevel') cfg.botLevel = Math.min(2, cfg.botLevel);
+      pushCfg(); break;
+    case 'price': if (m.item in cfg.prices) { cfg.prices[m.item] = int(m.value); pushCfg(); } break;
+    case 'ammo': if (m.item in cfg.ammoPrices) { cfg.ammoPrices[m.item] = int(m.value); pushCfg(); } break;
+    case 'money': setMoney(m.id, m.add !== undefined ? (H.players.get(m.id)?.money ?? 0) + (+m.add || 0) : int(m.value)); break;
+    case 'moneyAll': for (const p of H.players.values()) if (!p.bot) p.money = Math.min(cfg.maxMoney, int(m.value)); break;
+    case 'pause': hostPause(!!m.on); break;
+    case 'map': await hostSetMap(m.id); break;
+    case 'bot': addBot(m.team === 't' ? 't' : 'ct'); break;
+    case 'nobots': for (const b of [...H.bots]) removeBot(b.id); break;
+    case 'restart': hostRestart('Админ начал новый матч!'); break;
+    case 'defaults': { const map = cfg.map; cfg = structuredClone(DEFAULT_CFG); cfg.map = map; pushCfg(); break; }
+    default: adminAction(m.cmd, m.id);
+  }
+  adminRefresh();
+}
+// admin puts an exact amount of money on a player's account
+function setMoney(id, value) {
+  const p = H.players.get(id); if (!p || p.bot) return;
+  p.money = THREE.MathUtils.clamp(Math.round(value), 0, cfg.maxMoney);
+}
+// pause for everybody: nobody can move or shoot, bots freeze, grenades hang in the air, the clock stops
+function hostPause(on) {
+  H.paused = on;
+  hostBroadcast({ t:'pause', on });
+  hostBroadcast({ t:'info', text: on ? 'Админ поставил игру на паузу' : 'Игра продолжается!' });
+}
+// anything scheduled (like a respawn) waits while the game is paused
+function whenRunning(fn, ms) { setTimeout(function go() { H.paused ? setTimeout(go, 300) : fn(); }, ms); }
+async function hostSetMap(id) {
+  if (!MAPS[id] || id === mapId) return;
+  cfg.map = id;
+  await switchMap(id);
+  pushCfg();
+  hostRestart('Новая карта: ' + MAPS[id].name + '!');
 }
 function adminAction(act, id) {
   const p = H.players.get(id); if (!p) return;
-  if (act === 'give') p.money = Math.min(cfg.maxMoney, p.money + 1000);
-  if (act === 'take') p.money = Math.max(0, p.money - 1000);
-  if (act === 'zero') p.money = 0;
   if (act === 'remove') removeBot(id);
   if (act === 'team') {
     p.team = p.team === 'ct' ? 't' : 'ct';
@@ -2429,28 +2582,16 @@ function removeBot(id) {
   H.players.delete(id); H.bots.splice(H.bots.indexOf(b), 1);
   hostBroadcast({ t:'info', text: b.name + ' удалён' });
 }
-document.querySelectorAll('#admin [data-cfg]').forEach(el => el.onchange = () => {
-  const k = el.dataset.cfg;
-  cfg[k] = el.type === 'checkbox' ? el.checked : Math.max(0, Math.round(+el.value || 0));
-  if (k === 'winKills') cfg.winKills = Math.max(1, cfg.winKills);
-  pushCfg();
-});
-$('#aBotCT').onclick = () => { addBot('ct'); adminRefresh(); };
-$('#aBotT').onclick = () => { addBot('t'); adminRefresh(); };
-$('#aBotsNone').onclick = () => { for (const b of [...H.bots]) removeBot(b.id); adminRefresh(); };
-$('#aRestart').onclick = () => { hostRestart('Админ начал новый матч!'); adminRefresh(); };
-$('#aDefaults').onclick = () => { cfg = structuredClone(DEFAULT_CFG); pushCfg(); fillAdmin(); };
-$('#adminClose').onclick = () => toggleAdmin(false);
-$('#adminBtn').onclick = () => toggleAdmin(true);
-setInterval(adminRefresh, 1000); // keep money and scores in the player list fresh
+$('#adminBtn').onclick = () => window.open(adminUrl(), '_blank');
+setInterval(adminRefresh, 1000); // keep money and scores on the admin page fresh
 
 // ---------- bots (run only on the host)
 const NAV = [];
 function buildNav() {
-  for (let x = -36; x <= 36; x += 4) for (let z = -36; z <= 36; z += 4) {
+  const lim = MAPDEF.size / 2 - 4;
+  for (let x = -lim; x <= lim; x += 3) for (let z = -lim; z <= lim; z += 3) {
     const p = new THREE.Vector3(x, 0, z);
-    const insideHouse = Math.abs(x) < 3.5 && Math.abs(z) < 3.5; // closed yard: reachable only through a blown hole
-    if (!insideHouse && !colliders.some(b => b.min.y < 1 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
+    if (!MAPDEF.navSkip?.(x, z) && !colliders.some(b => b.min.y < 1 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
   }
 }
 let botSeq = 0;
@@ -2526,8 +2667,15 @@ function botThink(b, dt) {
 }
 
 // ================= CLIENT: handle messages =================
+const WORLD_MSGS = ['world', 'brk', 'prop', 'nade', 'boom', 'fire', 'reset'];
 function clientHandle(m) {
+  if (mapLoading && WORLD_MSGS.includes(m.t)) { pendingWorld.push(m); return; } // the new map isn't built yet
   switch (m.t) {
+    case 'pause':
+      gamePaused = m.on;
+      $('#paused').style.display = m.on ? 'flex' : 'none';
+      if (m.on) { me.firing = false; me.nadeHold = null; }
+      break;
     case 'snap': {
       const seen = new Set();
       teamScore = { ct:0, t:0 };
@@ -2561,6 +2709,7 @@ function clientHandle(m) {
       break;
     case 'cfg':
       cfg = m.cfg;
+      if (cfg.map && cfg.map !== mapId) switchMap(cfg.map); // the admin picked another map
       $('#goal').textContent = 'до ' + cfg.winKills;
       renderBuyMenu();
       break;
@@ -2808,7 +2957,6 @@ addEventListener('keydown', e => {
   if (!started) return;
   keys[e.code] = true;
   if (e.code === 'Tab') { e.preventDefault(); showBoard = true; }
-  if (adminOpen) { if (e.code === 'Escape') toggleAdmin(false); return; } // typing numbers in the admin panel
   if (e.code === 'KeyB') { toggleBuy(!buyOpen); return; }
   const n = +e.code.replace('Digit', '');
   if (buyOpen) {
@@ -2819,6 +2967,7 @@ addEventListener('keydown', e => {
   if (n >= 1 && n <= 4) selectSlot(n);
   if (e.code === 'KeyG' && me.nades > 0) selectSlot(4);
   if (e.code === 'KeyR') startReload();
+  if (e.code === 'KeyP' && isHost) hostPause(!H.paused); // the game's creator can pause everyone
 });
 addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Tab') showBoard = false; });
 
@@ -2851,7 +3000,7 @@ function startReload() {
 const shootRay = new THREE.Raycaster();
 function tryFire() {
   const t = now(), w = WEAPONS[me.weapon];
-  if (!me.alive || me.reloadEnd || t - me.lastShot < w.rate) return;
+  if (!me.alive || gamePaused || me.reloadEnd || t - me.lastShot < w.rate) return;
   if (!w.auto && me.firedThisClick) return;
   if (me.weapon === 'grenade') return; // grenades are thrown when the button is released (see mouseup)
   if (w.spin && me.spin < 1) return;    // minigun barrels still spinning up
@@ -2915,7 +3064,7 @@ function tryFire() {
   sendToHost({ t:'shot', o: r2(origin), e: r2(ends[0]), es: ends.length > 1 ? ends.map(r2) : undefined, w: me.weapon });
 }
 // the ground and the map's outer border stop every bullet
-function stopsBullets(hit) { const ud = hit.object.userData || {}; return ud.mat === 'sand' || ud.border; }
+function stopsBullets(hit) { const ud = hit.object.userData || {}; return ud.ground || ud.border; }
 function muzzleFlash(w) {
   flash.position.copy(muzzles[me.weapon]); flash.material.rotation = Math.random() * 6.28; flash.visible = true;
   flash.material.color.set(w.beam ? new THREE.Color(0.5, 3, 4) : new THREE.Color(4, 3, 2));
@@ -2959,7 +3108,7 @@ manager.onLoad = () => {
   const strip = (root, re) => root.children.filter(c => re.test(c.name)).forEach(c => root.remove(c));
   strip(MODELS.service_pistol, /_b$|magazine|bullet/);
   strip(MODELS.bolt_action_rifle_7_62, /bolt_b|bullet/);
-  buildProceduralGuns(); prepareSoldier(); buildMap(); buildNav(); setupViewmodels(); loadSounds();
+  buildProceduralGuns(); prepareSoldier(); buildMap(); buildNav(); setupViewmodels(); loadSounds(); // the desert is always ready
   $('#loadbar').style.width = '100%';
   $('#go').disabled = false;
   $('#go').textContent = joinCode ? 'Присоединиться к игре' : 'Создать игру';
@@ -2975,7 +3124,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, toggleAdmin, killEffect, H, hostThrow, explosion, walls, props, hostBlast, colliders, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, H, hostThrow, explosion, walls, props, hostBlast, colliders, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
@@ -2995,7 +3144,7 @@ function frame() {
       perf.frames = 0; perf.time = 0;
     }
 
-    if (me.alive) {
+    if (me.alive && !gamePaused) {
       let fx = 0, fz = 0;
       if (locked) {
         if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
