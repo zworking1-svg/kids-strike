@@ -112,7 +112,7 @@
       <h2>Оружие</h2>
       <p class="muted">Урон — сколько здоровья (из 100) снимает одно попадание в тело. В голову — больше (×2…×4, зависит от оружия), в ноги — ×0,75.
         У дробовиков это урон одной дробины. У гранаты, гранатомёта и РПГ — урон в самом центре взрыва. Пустое название — вернуть стандартное.</p>
-      <table class="wtable"><thead><tr><th>Слот</th><th>Название</th><th>Урон</th><th>Цена, $</th><th>Магазин патронов, $</th></tr></thead><tbody id="weapons"></tbody></table>
+      <table class="wtable"><thead><tr><th>Слот</th><th>Название</th><th>Урон</th><th>Перезарядка, сек</th><th>Цена, $</th><th>Магазин патронов, $</th></tr></thead><tbody id="weapons"></tbody></table>
     </section>
   </main>
 </div>
@@ -184,12 +184,14 @@ function render() {
     wt.innerHTML = sorted.map(([k, name, slot, def]) => `<tr><td class="slot">${slot ? slot : '—'}</td>` +
       `<td>${slot ? `<input type="text" maxlength="24" data-name="${k}" placeholder="${esc(def)}">` : esc(name)}</td>` +
       `<td>${k in cfg.dmg ? `<input type="number" min="0" max="10000" step="1" data-dmg="${k}">` : ''}</td>` +
+      `<td>${k in (cfg.reload || {}) ? `<input type="number" min="0.1" max="30" step="0.1" data-reload="${k}">` : ''}</td>` +
       `<td>${k in cfg.prices ? `<input type="number" min="0" step="50" data-price="${k}">` : 'бесплатно'}</td>` +
       `<td>${k in cfg.ammoPrices ? `<input type="number" min="0" step="5" data-ammo="${k}">` : ''}</td></tr>`).join('');
     wt.querySelectorAll('input').forEach(el => el.addEventListener('change', () => {
       const d = el.dataset;
       if (d.name) send('name', { item: d.name, value: el.value });
       if (d.dmg) send('dmg', { item: d.dmg, value: +el.value });
+      if (d.reload) send('reload', { item: d.reload, value: +el.value });
       if (d.price) send('price', { item: d.price, value: +el.value });
       if (d.ammo) send('ammo', { item: d.ammo, value: +el.value });
     }));
@@ -197,7 +199,7 @@ function render() {
   wt.querySelectorAll('input').forEach(el => {
     if (el === document.activeElement) return;
     const d = el.dataset;
-    el.value = d.name ? (cfg.names[d.name] || '') : d.dmg ? cfg.dmg[d.dmg] : d.price ? cfg.prices[d.price] : cfg.ammoPrices[d.ammo];
+    el.value = d.name ? (cfg.names[d.name] || '') : d.dmg ? cfg.dmg[d.dmg] : d.reload ? cfg.reload[d.reload] : d.price ? cfg.prices[d.price] : cfg.ammoPrices[d.ammo];
   });
   renderPlayers(s.players);
 }

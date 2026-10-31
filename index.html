@@ -273,6 +273,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -323,6 +324,9 @@ function applyNames() {
 const BLAST_DMG = { grenade: 165, launcher: 132, rpg: 231, jerrycan: 82 };
 const DEFAULT_DMG = { ...Object.fromEntries(Object.entries(WEAPONS).filter(([k]) => !BLAST_DMG[k] || k === 'grenade').map(([k, w]) => [k, w.dmg])), ...BLAST_DMG };
 function weaponDmg(w) { return cfg.dmg?.[w] ?? DEFAULT_DMG[w] ?? WEAPONS[w]?.dmg ?? 20; }
+// seconds to change the magazine, also set per weapon by the admin
+const DEFAULT_RELOAD = Object.fromEntries(Object.entries(WEAPONS).filter(([, w]) => w.mag && w.reload).map(([k, w]) => [k, w.reload]));
+function weaponReload(w) { return cfg.reload?.[w] ?? DEFAULT_RELOAD[w] ?? WEAPONS[w]?.reload ?? 2; }
 // the creator of the game can change all of these in the admin panel
 const DEFAULT_CFG = {
   startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
@@ -334,8 +338,10 @@ const DEFAULT_CFG = {
   ammoPrices: { ak47:80, m4:80, uzi:50, shotgun:65, dbshotgun:50, sniper:125, zhangomet:200, laser:150, minigun:300, launcher:400, rpg:800, deagle:40, beretta:30 },
   dmg: {},            // filled below with every weapon's default damage
   names: {},          // weapon renames, empty = default name
+  reload: {},         // filled below with every weapon's default reload time
 };
 DEFAULT_CFG.dmg = { ...DEFAULT_DMG };
+DEFAULT_CFG.reload = { ...DEFAULT_RELOAD };
 let cfg = structuredClone(DEFAULT_CFG);
 const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
@@ -1199,6 +1205,265 @@ function setupViewmodels() {
   vmModels.knife.position.set(0.16, -0.14, -0.3);
 
   for (const k in vmModels) { vmModels[k].traverse(c => { if (c.isMesh) c.frustumCulled = false; }); vm.add(vmModels[k]); }
+  buildHands();
+}
+
+// ================= first-person hands =================
+// Where the hands hold each gun, measured from the models. Gun frame: x along the barrel as a fraction of the gun's
+// length (+ = muzzle), y up in metres from the gun's centre. grip = right hand, fore = left hand,
+// mag = [x from, x to, top y] of the magazine, which is cut out of the model so the left hand can pull it out;
+// bolt / port = where the bolt handle and the loading port are; reload = how the gun is reloaded.
+const HOLD = {
+  ak47:     { grip:[-0.185, 0.0],   fore:[0.2, 0.035],   mag:[-0.05, 0.14, -0.01],  reload:'mag' },
+  m4:       { grip:[-0.15, -0.02],  fore:[0.19, 0.035],  mag:[-0.06, 0.05, -0.01],  reload:'mag' },
+  uzi:      { grip:[0.01, -0.06],   fore:[0.3, 0.04],    mag:[-0.06, 0.09, -0.095], reload:'mag' },
+  zhangomet:{ grip:[-0.08, -0.13],   fore:[0.22, -0.09],  mag:[-0.05, 0.08, -0.14],  reload:'mag' },
+  laser:    { grip:[-0.18, -0.06],  fore:[0.17, 0.0],    reload:'mag' },
+  minigun:  { grip:[-0.36, -0.07],  fore:[0.05, -0.08],  reload:'mag' },
+  shotgun:  { grip:[-0.25, -0.025], fore:[0.15, -0.025], port:[-0.05, -0.04], reload:'shells', shells:4, pump:true },
+  dbshotgun:{ grip:[-0.2, -0.025],  fore:[0.05, -0.01],  port:[-0.08, 0.07],  reload:'shells', shells:2, breakOpen:true },
+  launcher: { grip:[-0.22, -0.07],  fore:[0.25, -0.01],  port:[0.0, 0.1],     reload:'shells', shells:4 },
+  rpg:      { grip:[-0.27, -0.08],  fore:[-0.08, -0.08], port:[0.55, 0.0],    reload:'shells', shells:1 },
+  sniper:   { grip:[-0.2, -0.02],   fore:[0.08, 0.0],    bolt:[-0.08, 0.06], port:[-0.05, 0.05], reload:'bolt', shells:3 },
+  deagle:   { grip:[-0.28, -0.03],  fore:'support',      mag:[-0.36, -0.04, -0.07], reload:'mag' },
+  beretta:  { grip:[-0.22, -0.005], fore:'support',      mag:[-0.4, -0.05, -0.045], reload:'mag' },
+};
+// camouflage sleeves in the team's colours, dark leather gloves
+function camoTexture(base, spots) {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'); g.fillStyle = base; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 46; i++) {
+    g.fillStyle = spots[i % spots.length]; g.beginPath();
+    g.ellipse(Math.random() * 128, Math.random() * 128, 6 + Math.random() * 16, 4 + Math.random() * 9, Math.random() * 3, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 3);
+  return t;
+}
+const SLEEVE = {
+  ct: new THREE.MeshStandardMaterial({ map: camoTexture('#2f3540', ['#222730', '#3d4552', '#191c22']), roughness: 0.95 }),
+  t:  new THREE.MeshStandardMaterial({ map: camoTexture('#6b5b42', ['#544631', '#7f6d50', '#3f3424']), roughness: 0.95 }),
+};
+const GLOVE = new THREE.MeshStandardMaterial({ color: 0x3a322a, roughness: 0.65, metalness: 0.05 });
+const SHELL_MAT = new THREE.MeshStandardMaterial({ color: 0x9b1c14, roughness: 0.5 });
+// hand bases in the gun-holder frame (x right, y up, -z forward); the columns are where the hand's own
+// x (knuckle line, index finger at -x), y (back of the hand) and z (from the knuckles back to the wrist) point
+const basis = (x, y) => {
+  const X = new THREE.Vector3(...x).normalize(), Y = new THREE.Vector3(...y).normalize();
+  const Z = new THREE.Vector3().crossVectors(X, Y).normalize(); Y.crossVectors(Z, X);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+};
+const POSE = {
+  grip:    basis([0, -0.94, 0.34], [1, 0, 0]),      // right hand round a raked pistol grip, palm against it
+  fore:    basis([0, 0, -1], [-0.3, -0.95, 0]),     // left hand under the handguard, palm up, fingers over its right side
+  support: basis([0, 1, 0.3], [-1, 0, 0]),          // left hand wrapped round the right one on a pistol
+  grab:    basis([0, 0.2, -1], [-0.8, -0.6, 0]),    // left hand taking hold of a magazine / shell
+  bolt:    basis([0, -1, 0], [0.6, 0.8, 0]),        // right hand pinching the bolt handle
+  knife:   basis([0, -0.5, 0.86], [1, 0, 0]),
+  nade:    basis([-1, 0, 0], [0, -1, 0]),           // right hand under the grenade, palm up
+};
+const CURL = { grip: 1, fore: 0.85, support: 0.95, grab: 0.65, bolt: 0.55, knife: 1, nade: 0.75 };
+function makeHand(left) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  if (left) body.scale.x = -1; // a mirrored right hand
+  const cap = (r, len) => new THREE.CapsuleGeometry(r, Math.max(0.001, len - 2 * r), 3, 8).rotateX(Math.PI / 2).translate(0, 0, -len / 2);
+  // palm centred on the origin: wrist at +z, knuckles at -z
+  const palm = new THREE.Mesh(new RoundedBoxGeometry(0.084, 0.032, 0.095, 3, 0.012), GLOVE); body.add(palm);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.036, 0.06, 14).rotateX(Math.PI / 2).scale(1.25, 0.8, 1), GLOVE); cuff.position.z = 0.07; body.add(cuff);
+  const fingers = [];
+  for (let i = 0; i < 4; i++) {
+    const s = [1, 1.08, 1.02, 0.82][i], joints = [];
+    let parent = body, z = -0.045;
+    for (const [len, r] of [[0.042 * s, 0.0105], [0.028 * s, 0.0098], [0.022 * s, 0.009]]) {
+      const j = new THREE.Group(); j.position.set(parent === body ? -0.031 + i * 0.0205 : 0, 0, z);
+      j.add(new THREE.Mesh(cap(r, len), GLOVE)); parent.add(j); joints.push(j); parent = j; z = -len;
+    }
+    fingers.push(joints);
+  }
+  const thumb = [];
+  { let parent = body;
+    for (const [len, r, pos] of [[0.04, 0.012, [-0.038, -0.01, 0.02]], [0.03, 0.011, null], [0.025, 0.0105, null]]) {
+      const j = new THREE.Group(); if (pos) j.position.set(...pos); else j.position.z = -thumb.at(-1).userData.len;
+      j.userData.len = len; j.add(new THREE.Mesh(cap(r, len), GLOVE)); parent.add(j); thumb.push(j); parent = j;
+    } }
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.07, 10).rotateZ(Math.PI / 2), SHELL_MAT);
+  shell.position.set(0, -0.03, -0.05); shell.visible = false; body.add(shell);
+  return { root, fingers, thumb, shell, curl: 1, index: 1 };
+}
+function makeArm() {
+  const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.048, 1, 12), SLEEVE.ct);
+  const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.058, 1, 12), SLEEVE.ct);
+  const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), SLEEVE.ct);
+  return { fore, upper, elbow };
+}
+const hands = { group: new THREE.Group(), r: null, l: null, ra: null, la: null, mags: {}, trig: 0, cycle: null };
+function buildHands() {
+  hands.r = makeHand(false); hands.l = makeHand(true); hands.ra = makeArm(); hands.la = makeArm();
+  for (const o of [hands.r.root, hands.l.root, ...Object.values(hands.ra), ...Object.values(hands.la)]) hands.group.add(o);
+  hands.group.traverse(c => { if (c.isMesh) { c.frustumCulled = false; c.castShadow = false; } });
+  hands.group.visible = false; vm.add(hands.group);
+  for (const k in HOLD) if (HOLD[k].mag || HOLD[k].reload === 'mag') hands.mags[k] = cutMagazine(k);
+}
+// gun frame (x = barrel, as a fraction of length; y up) -> holder frame (x right, y up, -z forward)
+function holdPoint(k, [f, y], z = 0) { return new THREE.Vector3(z, y, -f * GUN_LEN[k]); }
+// Move the magazine's triangles out of the gun into their own mesh that the left hand can carry.
+// Guns without a separate magazine in the model (laser, minigun) get a simple box instead.
+function cutMagazine(k) {
+  const holder = vmModels[k], gun = holder.children[0], h = HOLD[k];
+  holder.updateMatrixWorld(true);
+  const mag = new THREE.Group(); holder.add(mag);
+  const box = new THREE.Box3();
+  if (h.mag) {
+    const [f0, f1, top] = h.mag, L = GUN_LEN[k], gInv = gun.matrixWorld.clone().invert(), hInv = holder.matrixWorld.clone().invert();
+    gun.traverse(o => {
+      if (!o.isMesh || !o.geometry.attributes.position) return;
+      const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      const toGun = gInv.clone().multiply(o.matrixWorld), pos = geo.attributes.position, v = new THREE.Vector3();
+      const tris = pos.count / 3, keep = [], take = [];
+      const groupOf = t => { for (let g = 0; g < geo.groups.length; g++) { const G = geo.groups[g]; if (t * 3 >= G.start && t * 3 < G.start + G.count) return G.materialIndex; } return 0; };
+      for (let t = 0; t < tris; t++) {
+        let cx = 0, cy = 0;
+        for (let i = 0; i < 3; i++) { v.fromBufferAttribute(pos, t * 3 + i).applyMatrix4(toGun); cx += v.x / 3; cy += v.y / 3; }
+        (cx / L >= f0 && cx / L <= f1 && cy < top ? take : keep).push(t);
+      }
+      if (!take.length) return;
+      const build = list => {
+        list.sort((a, b) => groupOf(a) - groupOf(b));
+        const g2 = new THREE.BufferGeometry();
+        for (const name in geo.attributes) {
+          const A = geo.attributes[name], arr = new A.array.constructor(list.length * 3 * A.itemSize);
+          list.forEach((t, n) => arr.set(A.array.subarray(t * 3 * A.itemSize, (t + 1) * 3 * A.itemSize), n * 3 * A.itemSize));
+          g2.setAttribute(name, new THREE.BufferAttribute(arr, A.itemSize, A.normalized));
+        }
+        if (geo.groups.length) { let start = 0; for (let n = 0; n <= list.length; n++) if (n === list.length || (n > start && groupOf(list[n]) !== groupOf(list[start]))) { g2.addGroup(start * 3, (n - start) * 3, groupOf(list[start])); start = n; } }
+        return g2;
+      };
+      o.geometry = build(keep);
+      const m = new THREE.Mesh(build(take), o.material);
+      hInv.clone().multiply(o.matrixWorld).decompose(m.position, m.quaternion, m.scale);
+      m.frustumCulled = false; mag.add(m);
+      for (const t of take) for (let i = 0; i < 3; i++) box.expandByPoint(v.fromBufferAttribute(pos, t * 3 + i).applyMatrix4(hInv.clone().multiply(o.matrixWorld)));
+    });
+  }
+  if (mag.children.length === 0) {
+    // stand-in: a dark box under the receiver (a power cell for the laser, an ammo box for the minigun)
+    const s = k === 'minigun' ? [0.12, 0.1, 0.1] : [0.05, 0.1, 0.035];
+    const m = new THREE.Mesh(new THREE.BoxGeometry(s[2], s[1], s[0]), k === 'laser' ? new THREE.MeshStandardMaterial({ color: 0x1a2a30, emissive: 0x33ccff, emissiveIntensity: 0.6 }) : GUN_MAT.black);
+    m.position.copy(holdPoint(k, [k === 'minigun' ? -0.15 : -0.02, -0.1])); m.visible = false; m.userData.standIn = true; mag.add(m);
+    box.setFromObject(m);
+  }
+  return { group: mag, at: new THREE.Vector3(box.getCenter(new THREE.Vector3()).x - 0.035, box.min.y + 0.035, box.getCenter(new THREE.Vector3()).z) };
+}
+// reload choreography: keyframes over 0..1 of the reload time. l / r = [anchor, offset] for each hand,
+// att = the magazine (or shell) travels with the left hand, shell = a shell / round shows in the left hand
+function reloadKeys(k) {
+  const h = HOLD[k], K = [];
+  const key = (t, l, r = ['G'], o = {}) => K.push({ t, l, r, ...o });
+  if (h.reload === 'mag') {
+    key(0, ['F']); key(0.14, ['M'], ['G'], { att: 1 }); key(0.28, ['M', [0, -0.17, 0.05]], ['G'], { att: 1 }); key(0.4, ['OFF'], ['G'], { att: 1 });
+    key(0.55, ['M', [0, -0.17, 0.05]], ['G'], { att: 1 }); key(0.68, ['M'], ['G'], { att: 1 }); key(0.82, ['F']); key(1, ['F']);
+  } else if (h.reload === 'bolt') {
+    key(0, ['F']); key(0.1, ['F'], ['B']); key(0.2, ['F'], ['B', [0, 0, 0.09]]);
+    const n = h.shells; for (let i = 0; i < n; i++) { const t0 = 0.24 + i * 0.5 / n; key(t0, ['OFF'], ['B', [0, 0, 0.09]], { shell: 1 }); key(t0 + 0.3 / n, ['P'], ['B', [0, 0, 0.09]], { shell: 1 }); key(t0 + 0.45 / n, ['P', [0, 0.03, 0]], ['B', [0, 0, 0.09]]); }
+    key(0.8, ['F'], ['B', [0, 0, 0.09]]); key(0.88, ['F'], ['B']); key(0.96, ['F'], ['G']); key(1, ['F']);
+  } else {
+    key(0, ['F']);
+    const n = h.shells, end = h.pump ? 0.74 : 0.86;
+    for (let i = 0; i < n; i++) { const t0 = 0.06 + i * (end - 0.06) / n, d = (end - 0.06) / n; key(t0 + d * 0.15, ['OFF'], ['G'], { shell: 1 }); key(t0 + d * 0.6, ['P'], ['G'], { shell: 1 }); key(t0 + d * 0.9, ['P', [0, k === 'rpg' ? 0 : 0.03, k === 'rpg' ? 0.06 : 0]]); }
+    if (h.pump) { key(0.8, ['F']); key(0.87, ['F', [0, 0, 0.1]]); key(0.94, ['F']); }
+    key(1, ['F']);
+  }
+  return K;
+}
+const smooth = x => x * x * (3 - 2 * x);
+const _armDir = new THREE.Vector3();
+function anchorOf(k, name, side) {
+  const h = HOLD[k];
+  if (name === 'G') return { p: holdPoint(k, h.grip, 0.03), pose: 'grip' };
+  if (name === 'F') {
+    if (h.fore === 'support') return { p: holdPoint(k, h.grip, -0.035).add(new THREE.Vector3(0, -0.02, 0.01)), pose: 'support' };
+    return { p: holdPoint(k, h.fore, -0.03).add(new THREE.Vector3(0, -0.012, 0)), pose: 'fore' };
+  }
+  if (name === 'M') return { p: hands.mags[k].at.clone().add(new THREE.Vector3(-0.03, 0, 0)), pose: 'grab' };
+  if (name === 'B') return { p: holdPoint(k, h.bolt, 0.05), pose: 'bolt' };
+  if (name === 'P') return { p: holdPoint(k, h.port, k === 'rpg' ? 0 : -0.02), pose: 'grab' };
+  // out of sight below the screen, where the spare magazines and shells come from
+  const f = anchorOf(k, 'F', side).p; return { p: new THREE.Vector3(f.x - 0.12, -0.5, f.z + 0.25), pose: 'grab' };
+}
+// shotgun pump and sniper bolt after each shot
+function cycleAfterShot(kind) { hands.cycle = { kind, t0: now() + (kind === 'pump' ? 0.3 : 0.4), dur: kind === 'pump' ? 0.35 : 0.5 }; }
+function placeArm(arm, wrist, elbowDir, foreLen, upperLen) {
+  const elbow = wrist.clone().addScaledVector(elbowDir, foreLen);
+  const shoulder = elbow.clone().add(new THREE.Vector3(elbowDir.x * 0.5, -0.55, 0.45).normalize().multiplyScalar(upperLen));
+  for (const [mesh, a, b] of [[arm.fore, wrist, elbow], [arm.upper, elbow, shoulder]]) {
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), _armDir.subVectors(a, b).normalize());
+    mesh.scale.set(1, a.distanceTo(b), 1);
+  }
+  arm.elbow.position.copy(elbow);
+}
+function setFingers(hand, curl, index) {
+  hand.fingers.forEach((joints, i) => {
+    const c = i === 0 ? index : curl;
+    joints[0].rotation.x = -c * 1.25; joints[1].rotation.x = -c * 1.5; joints[2].rotation.x = -c * 1.0;
+  });
+  hand.thumb[0].rotation.set(-0.3 - curl * 0.5, 0.75, 0.5); hand.thumb[1].rotation.x = -curl * 0.6; hand.thumb[2].rotation.x = -curl * 0.5;
+}
+function updateHands(dt) {
+  const k = me.weapon, holder = vmModels[k];
+  const show = holder?.visible && me.alive;
+  hands.group.visible = !!show;
+  if (!show) return;
+  const sleeve = SLEEVE[myTeam] || SLEEVE.ct;
+  for (const arm of [hands.ra, hands.la]) for (const m of Object.values(arm)) m.material = sleeve;
+  const hasLeft = !!HOLD[k];
+  for (const o of [hands.l.root, ...Object.values(hands.la)]) o.visible = hasLeft && !(k === 'grenade');
+  // where each hand is, in the holder frame
+  let L, R, att = false, shell = false, magOff = null;
+  if (k === 'knife') R = { p: new THREE.Vector3(0.035, -0.06, 0.08), pose: 'knife' };
+  else if (k === 'grenade') R = { p: new THREE.Vector3(0, -0.06, 0.01), pose: 'nade' };
+  else if (!hasLeft) R = { p: new THREE.Vector3(0, -0.06, 0.1), pose: 'grip' };
+  else {
+    const tnow = now();
+    if (me.reloadEnd && me.reloadDur) {
+      const p = THREE.MathUtils.clamp(1 - (me.reloadEnd - tnow) / me.reloadDur, 0, 1), K = hands.keys?.[k] || ((hands.keys ||= {})[k] = reloadKeys(k));
+      let i = 0; while (i < K.length - 2 && K[i + 1].t < p) i++;
+      const A = K[i], B = K[i + 1], s = smooth(THREE.MathUtils.clamp((p - A.t) / Math.max(1e-4, B.t - A.t), 0, 1));
+      const at = (key, side) => { const a = anchorOf(k, key[0], side); if (key[1]) a.p.add(new THREE.Vector3(...key[1])); return a; };
+      const mix = (a, b) => ({ p: a.p.clone().lerp(b.p, s), q: POSE[a.pose].clone().slerp(POSE[b.pose], s), curl: THREE.MathUtils.lerp(CURL[a.pose], CURL[b.pose], s) });
+      L = mix(at(A.l, 'l'), at(B.l, 'l')); R = mix(at(A.r, 'r'), at(B.r, 'r'));
+      att = !!(A.att && B.att); shell = !!(A.shell && B.shell);
+      if (att) magOff = L.p.clone().sub(anchorOf(k, 'M').p);
+    } else {
+      L = anchorOf(k, 'F'); R = anchorOf(k, 'G');
+      // pump the shotgun / work the bolt between shots
+      const c = hands.cycle;
+      if (c && tnow >= c.t0 && tnow < c.t0 + c.dur) {
+        const s = Math.sin((tnow - c.t0) / c.dur * Math.PI);
+        if (c.kind === 'pump') L.p.z += s * 0.1;
+        else { const B = anchorOf(k, 'B'); R = { p: R.p.clone().lerp(B.p.clone().add(new THREE.Vector3(0, 0, Math.max(0, s * 1.6 - 0.6) * 0.09)), Math.min(1, s * 2)), pose: s > 0.3 ? 'bolt' : 'grip' }; }
+      }
+    }
+  }
+  // magazine follows the left hand while it is being swapped
+  const mg = hands.mags[k];
+  if (mg) { mg.group.position.copy(magOff || new THREE.Vector3()); for (const c of mg.group.children) if (c.userData.standIn) c.visible = !!magOff; }
+  hands.l.shell.visible = shell;
+  hands.trig = Math.max(0, hands.trig - dt);
+  holder.updateMatrix();
+  for (const [hand, H, arm, side] of [[hands.r, R, hands.ra, 1], [hands.l, L, hands.la, -1]]) {
+    if (!H) continue;
+    const q = H.q || POSE[H.pose];
+    hand.root.position.copy(H.p).applyMatrix4(holder.matrix);
+    hand.root.quaternion.copy(holder.quaternion).multiply(q);
+    const curl = H.curl ?? CURL[H.pose];
+    const index = side === 1 && (H.pose === 'grip') ? 0.35 + (hands.trig > 0 ? 0.55 : 0) : curl; // trigger finger
+    setFingers(hand, curl, index);
+    // forearm leaves the wrist, bends at an elbow below and outside the screen
+    const wrist = new THREE.Vector3(0, 0, 0.09).applyQuaternion(hand.root.quaternion).add(hand.root.position);
+    const back = new THREE.Vector3(0, 0, 1).applyQuaternion(hand.root.quaternion);
+    const elbowDir = (side === 1 ? new THREE.Vector3(0.5, -0.65, 0.55) : new THREE.Vector3(-0.32, -0.8, 0.5)).normalize().multiplyScalar(0.75).addScaledVector(back, 0.25).normalize();
+    placeArm(arm, wrist, elbowDir, 0.27, 0.32);
+  }
 }
 // muzzle flash: additive glowing sprite, bright enough to bloom
 function glowTexture(inner, outer) {
@@ -2662,7 +2927,7 @@ function loadCfg() {
     const saved = JSON.parse(store.get('ks-cfg', 'null'));
     if (saved) cfg = { ...structuredClone(DEFAULT_CFG), ...saved,
       prices: { ...DEFAULT_CFG.prices, ...saved.prices }, ammoPrices: { ...DEFAULT_CFG.ammoPrices, ...saved.ammoPrices },
-      dmg: { ...DEFAULT_CFG.dmg, ...saved.dmg }, names: { ...saved.names } };
+      dmg: { ...DEFAULT_CFG.dmg, ...saved.dmg }, reload: { ...DEFAULT_CFG.reload, ...saved.reload }, names: { ...saved.names } };
     applyNames();
   } catch {}
 }
@@ -2698,7 +2963,7 @@ async function adminCommand(m) {
   const int = v => Math.max(0, Math.round(+v || 0));
   switch (m.cmd) {
     case 'cfg':
-      if (!(m.key in DEFAULT_CFG) || ['map', 'prices', 'ammoPrices', 'dmg', 'names'].includes(m.key)) break;
+      if (!(m.key in DEFAULT_CFG) || ['map', 'prices', 'ammoPrices', 'dmg', 'reload', 'names'].includes(m.key)) break;
       cfg[m.key] = CFG_BOOL.includes(m.key) ? !!m.value
         : m.key === 'jump' ? THREE.MathUtils.clamp(Math.round((+m.value || 1.3) * 10) / 10, 0.3, 30) // metres, can be fractional
         : int(m.value);
@@ -2708,6 +2973,7 @@ async function adminCommand(m) {
     case 'price': if (m.item in cfg.prices) { cfg.prices[m.item] = int(m.value); pushCfg(); } break;
     case 'ammo': if (m.item in cfg.ammoPrices) { cfg.ammoPrices[m.item] = int(m.value); pushCfg(); } break;
     case 'dmg': if (m.item in DEFAULT_DMG) { cfg.dmg[m.item] = Math.min(10000, int(m.value)); pushCfg(); } break;
+    case 'reload': if (m.item in DEFAULT_RELOAD) { cfg.reload[m.item] = THREE.MathUtils.clamp(Math.round((+m.value || 0) * 10) / 10, 0.1, 30); pushCfg(); } break;
     case 'name': if (WEAPONS[m.item]) { cfg.names[m.item] = String(m.value || '').trim().slice(0, 24); applyNames(); pushCfg(); } break;
     case 'money': setMoney(m.id, m.add !== undefined ? (H.players.get(m.id)?.money ?? 0) + (+m.add || 0) : int(m.value)); break;
     case 'moneyAll': for (const p of H.players.values()) if (!p.bot) p.money = Math.min(cfg.maxMoney, int(m.value)); break;
@@ -3187,7 +3453,7 @@ function startReload() {
   const w = WEAPONS[me.weapon];
   if (me.weapon === 'knife' || me.weapon === 'grenade' || me.reloadEnd || me.ammo[me.weapon] >= w.mag || !me.alive) return;
   if (!cfg.infAmmo && !me.reserve[me.weapon]) { showCenter('<small>Патроны кончились — купи на базе (B)</small>', 1.5); return; }
-  me.reloadEnd = now() + w.reload; setZoom(false);
+  me.reloadDur = weaponReload(me.weapon); me.reloadEnd = now() + me.reloadDur; setZoom(false); // the hands animation stretches to fit
   if (!playSample(RELOAD_SND[me.weapon], 0.6)) beep(300, .05, .08);
 }
 
@@ -3213,7 +3479,7 @@ function tryFire() {
     // grenade launcher / RPG: launch a projectile; the host flies it and blows it up on impact
     const v = aim.clone().multiplyScalar(w.proj.speed);
     sendToHost({ t:'proj', w: me.weapon, o: r2(origin.clone().addScaledVector(aim, 0.8)), v: r2(v) });
-    muzzleFlash(w); me.pitch = Math.min(1.5, me.pitch + w.kick); vmKick = 0.05 + w.kick;
+    muzzleFlash(w); me.pitch = Math.min(1.5, me.pitch + w.kick); vmKick = 0.05 + w.kick; hands.trig = 0.07;
     return; // the launch sound plays when the shell appears (for everyone at once)
   }
   const targets = worldMeshes.slice();
@@ -3253,9 +3519,10 @@ function tryFire() {
     me.pitch = Math.min(1.5, me.pitch + w.kick);
   }
   vmKick = me.weapon === 'knife' ? 0.25 : 0.05 + w.kick;
+  hands.trig = 0.07; // index finger squeezes the trigger
   playShot(me.weapon, 0.8);
-  if (me.weapon === 'shotgun') setTimeout(() => playSample('pump', 0.5), 350);
-  if (me.weapon === 'sniper') { setTimeout(() => playSample('bolt', 0.5), 450); setZoom(false); }
+  if (me.weapon === 'shotgun') { setTimeout(() => playSample('pump', 0.5), 350); cycleAfterShot('pump'); }
+  if (me.weapon === 'sniper') { setTimeout(() => playSample('bolt', 0.5), 450); setZoom(false); cycleAfterShot('bolt'); }
   sendToHost({ t:'shot', o: r2(origin), e: r2(ends[0]), es: ends.length > 1 ? ends.map(r2) : undefined, w: me.weapon });
 }
 // the ground and the map's outer border stop every bullet
@@ -3319,7 +3586,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, hands, HOLD, POSE, startReload, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
@@ -3387,12 +3654,16 @@ function frame() {
     for (const k in vmModels) vmModels[k].visible = me.alive && k === me.weapon && !me.zoom && !(k === 'grenade' && nadeHideT > 0);
     vmKick = Math.max(0, vmKick - dt * 0.5);
     drawT = Math.max(0, drawT - dt);
-    const dip = (me.reloadEnd ? 0.12 : 0) + drawT * 0.4;
+    // reload: the gun eases into a tilted pose and back out, so the hands' magazine change reads clearly
+    const rp = me.reloadEnd && me.reloadDur ? THREE.MathUtils.clamp(1 - (me.reloadEnd - t) / me.reloadDur, 0, 1) : 0;
+    const rk = me.reloadEnd ? smooth(Math.min(1, rp / 0.12, (1 - rp) / 0.12)) * Math.min(1, (GUN_LEN[me.weapon] || 0.3) / 0.8) : 0; // pistols barely tilt, they sit close to the eye
+    const dip = rk * 0.06 + drawT * 0.4;
     // holding a grenade: the arm pulls back and up, ready to throw (lower for the short lob)
     holdK += ((me.nadeHold ? 1 : 0) - holdK) * Math.min(1, dt * 10);
     const lobHold = me.nadeHold?.btn === 2 ? -1 : 1;
     vm.position.set(Math.sin(bob) * 0.008 + holdK * 0.05, Math.abs(Math.cos(bob)) * 0.008 - dip + holdK * 0.09 * lobHold, vmKick + holdK * 0.12);
-    vm.rotation.set(me.weapon === 'knife' ? -vmKick * 2.4 : vmKick * 1.2 + (me.reloadEnd ? 0.35 : 0) - holdK * 0.5 * lobHold, 0, me.reloadEnd ? -0.3 : holdK * -0.3);
+    vm.rotation.set(me.weapon === 'knife' ? -vmKick * 2.4 : vmKick * 1.2 + rk * 0.3 - holdK * 0.5 * lobHold, rk * 0.15, me.reloadEnd ? rk * -0.35 : holdK * -0.3);
+    updateHands(dt);
     $('#nadehint').style.display = me.nadeHold ? 'block' : 'none';
 
     sendTimer -= dt;
