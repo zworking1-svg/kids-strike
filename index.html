@@ -2530,10 +2530,9 @@ function loadSounds() {
     .then(b => a.decodeAudioData(b)).then(buf => { SND[v] = buf; }).catch(() => {});
   for (const [k, file] of [['boom_punch', 'boom_punch.flac'], ['boom_tail', 'boom_tail.ogg']]) fetch('assets/snd/' + file)
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => a.decodeAudioData(b)).then(buf => { SND[k] = buf; }).catch(() => {});
-  // real Kalashnikov bursts: each recording gives one close-up AK-47 shot, picked at random so a burst never repeats
-  SND.ak47_takes = [];
-  for (let i = 1; i <= 3; i++) fetch(`assets/snd/ak47_real_${i}.mp3`).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
-    .then(b => a.decodeAudioData(b)).then(buf => SND.ak47_takes.push(lastShotOfBurst(buf))).catch(() => {});
+  // the AK-47 shot chosen by the game's creator: one shot cut from a real Kalashnikov burst, used near and far
+  fetch('assets/snd/ak47_real.mp3').then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+    .then(b => a.decodeAudioData(b)).then(buf => { SND.ak47_real = lastShotOfBurst(buf); }).catch(() => {});
 }
 // cut the final shot of a burst together with its natural echo (earlier shots are cut short by the next one),
 // trimmed to 0.9 s with a soft fade and levelled so all takes sound equally loud
@@ -2572,10 +2571,7 @@ function playShot(kind, vol = 1, dist = 0) {
   if (vol < 0.03 || MUTED) return;
   if (kind === 'laser') return playLaser(vol, dist);
   const [base, rate, gain] = SHOT_ALIAS[kind] || [kind, kind === 'deagle' ? 0.86 : 1, 1]; // .45 pitched down = heavier Deagle boom
-  let take = dist > 18 && SND[base + '_far'] ? base + '_far' : base;
-  if (take === 'ak47' && SND.ak47_takes?.length) {
-    take = 'ak47_take'; SND.ak47_take = SND.ak47_takes[Math.random() * SND.ak47_takes.length | 0];
-  }
+  const take = base === 'ak47' && SND.ak47_real ? 'ak47_real' : dist > 18 && SND[base + '_far'] ? base + '_far' : base;
   if (kind === 'launcher' || kind === 'rpg') playWhoosh(vol * (kind === 'rpg' ? 1 : 0.5), kind === 'rpg' ? 1.2 : 0.5);
   if (playSample(take, vol * gain, dist * 0.5, rate)) return;
   const a = audio(), src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
