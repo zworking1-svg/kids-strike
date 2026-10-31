@@ -38,6 +38,7 @@
   .wtable input[type=number] { width:90px; }
   .wtable input[type=text] { width:100%; min-width:150px; padding:6px 8px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 17px Rajdhani,sans-serif; }
   .wtable td.slot { color:var(--muted); white-space:nowrap; }
+  .wtable select.snd { width:250px; }
   .muted { color:var(--muted); font-size:14px; }
   #gate { max-width:520px; margin:12vh auto; background:var(--panel); padding:24px; border-left:3px solid var(--accent); }
   #gate input { width:100%; padding:9px; margin:6px 0 12px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 18px Rajdhani,sans-serif; }
@@ -111,8 +112,9 @@
     <section class="wide">
       <h2>Оружие</h2>
       <p class="muted">Урон — сколько здоровья (из 100) снимает одно попадание в тело. В голову — больше (×2…×4, зависит от оружия), в ноги — ×0,75.
-        У дробовиков это урон одной дробины. У гранаты, гранатомёта и РПГ — урон в самом центре взрыва. Пустое название — вернуть стандартное.</p>
-      <table class="wtable"><thead><tr><th>Слот</th><th>Название</th><th>Урон</th><th>Перезарядка, сек</th><th>Цена, $</th><th>Магазин патронов, $</th></tr></thead><tbody id="weapons"></tbody></table>
+        У дробовиков это урон одной дробины. У гранаты, гранатомёта и РПГ — урон в самом центре взрыва. Пустое название — вернуть стандартное.
+        Звук выстрела: выбери в списке, кнопка ▶ проиграет его во вкладке с игрой (громкость компьютера должна быть включена).</p>
+      <table class="wtable"><thead><tr><th>Слот</th><th>Название</th><th>Урон</th><th>Перезарядка, сек</th><th>Звук выстрела</th><th>Цена, $</th><th>Магазин патронов, $</th></tr></thead><tbody id="weapons"></tbody></table>
     </section>
   </main>
 </div>
@@ -185,6 +187,8 @@ function render() {
       `<td>${slot ? `<input type="text" maxlength="24" data-name="${k}" placeholder="${esc(def)}">` : esc(name)}</td>` +
       `<td>${k in cfg.dmg ? `<input type="number" min="0" max="10000" step="1" data-dmg="${k}">` : ''}</td>` +
       `<td>${k in (cfg.reload || {}) ? `<input type="number" min="0.1" max="30" step="0.1" data-reload="${k}">` : ''}</td>` +
+      `<td>${k in (cfg.sound || {}) ? `<div class="row" style="flex-wrap:nowrap"><select class="snd" data-sound="${k}">${(s.sounds || []).map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('')}</select>` +
+        `<button data-hear="${k}" title="Послушать">▶</button></div>` : ''}</td>` +
       `<td>${k in cfg.prices ? `<input type="number" min="0" step="50" data-price="${k}">` : 'бесплатно'}</td>` +
       `<td>${k in cfg.ammoPrices ? `<input type="number" min="0" step="5" data-ammo="${k}">` : ''}</td></tr>`).join('');
     wt.querySelectorAll('input').forEach(el => el.addEventListener('change', () => {
@@ -195,12 +199,20 @@ function render() {
       if (d.price) send('price', { item: d.price, value: +el.value });
       if (d.ammo) send('ammo', { item: d.ammo, value: +el.value });
     }));
+    // picking a sound saves it and plays it once, so you hear what you chose
+    wt.querySelectorAll('select[data-sound]').forEach(el => el.addEventListener('change', () => {
+      send('sound', { item: el.dataset.sound, value: el.value });
+      send('hear', { item: el.dataset.sound, value: el.value });
+    }));
+    wt.querySelectorAll('[data-hear]').forEach(b => b.onclick = () =>
+      send('hear', { item: b.dataset.hear, value: wt.querySelector(`select[data-sound="${b.dataset.hear}"]`).value }));
   }
   wt.querySelectorAll('input').forEach(el => {
     if (el === document.activeElement) return;
     const d = el.dataset;
     el.value = d.name ? (cfg.names[d.name] || '') : d.dmg ? cfg.dmg[d.dmg] : d.reload ? cfg.reload[d.reload] : d.price ? cfg.prices[d.price] : cfg.ammoPrices[d.ammo];
   });
+  wt.querySelectorAll('select[data-sound]').forEach(el => { if (el !== document.activeElement) el.value = cfg.sound[el.dataset.sound]; });
   renderPlayers(s.players);
 }
 // one row per player, kept between updates so a half-typed amount isn't lost

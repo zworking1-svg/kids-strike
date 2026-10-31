@@ -326,6 +326,29 @@ function weaponDmg(w) { return cfg.dmg?.[w] ?? DEFAULT_DMG[w] ?? WEAPONS[w]?.dmg
 // seconds to change the magazine, also set per weapon by the admin
 const DEFAULT_RELOAD = Object.fromEntries(Object.entries(WEAPONS).filter(([, w]) => w.mag && w.reload).map(([k, w]) => [k, w.reload]));
 function weaponReload(w) { return cfg.reload?.[w] ?? DEFAULT_RELOAD[w] ?? WEAPONS[w]?.reload ?? 2; }
+// shot sounds the admin can pick for any gun: [name, recording, pitch, loudness]
+// guns without their own recording borrow a close relative at another pitch:
+// Uzi = 9 mm pistol fired fast, double-barrel = shotgun lower and louder, minigun = the Kalashnikov burst pitched up,
+// launcher / RPG = a deep shotgun "thump" (plus a synthetic whoosh that always comes with them)
+const SHOT_SOUNDS = {
+  kalash:  ['Калашников (очередь)', 'kalash', 1, 1],
+  ak47:    ['Автомат, одиночный', 'ak47', 1, 1],
+  m4:      ['M4 (AR-15)', 'm4', 1, 1],
+  minigun: ['Калашников, высокий', 'kalash', 1.18, 0.75],
+  uzi:     ['Пистолет-пулемёт', 'beretta', 1.08, 0.9],
+  beretta: ['Пистолет 9 мм', 'beretta', 1, 1],
+  deagle:  ['Тяжёлый пистолет', 'deagle', 0.86, 1],
+  shotgun: ['Дробовик', 'shotgun', 1, 1],
+  dbshotgun:['Дробовик, громкий', 'shotgun', 0.85, 1.25],
+  sniper:  ['Снайперка', 'sniper', 1, 1],
+  zhang:   ['Снайперка, высокая', 'sniper', 1.45, 0.8],
+  thump:   ['Глухой «бум»', 'shotgun', 0.55, 0.7],
+  rpg:     ['Глухой «бум», низкий', 'shotgun', 0.5, 0.8],
+  laser:   ['Лазер «пиу»', 'laser', 1, 1],
+};
+const DEFAULT_SOUND = { ak47:'kalash', m4:'m4', uzi:'uzi', shotgun:'shotgun', dbshotgun:'dbshotgun', zhangomet:'zhang', sniper:'sniper',
+  laser:'laser', minigun:'minigun', launcher:'thump', rpg:'rpg', deagle:'deagle', beretta:'beretta' };
+function weaponSound(w) { return SHOT_SOUNDS[cfg.sound?.[w]] ? cfg.sound[w] : DEFAULT_SOUND[w]; }
 // the creator of the game can change all of these in the admin panel
 const DEFAULT_CFG = {
   startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
@@ -338,9 +361,11 @@ const DEFAULT_CFG = {
   dmg: {},            // filled below with every weapon's default damage
   names: {},          // weapon renames, empty = default name
   reload: {},         // filled below with every weapon's default reload time
+  sound: {},          // filled below with every weapon's default shot sound
 };
 DEFAULT_CFG.dmg = { ...DEFAULT_DMG };
 DEFAULT_CFG.reload = { ...DEFAULT_RELOAD };
+DEFAULT_CFG.sound = { ...DEFAULT_SOUND };
 let cfg = structuredClone(DEFAULT_CFG);
 const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
@@ -2616,7 +2641,7 @@ function loadSounds() {
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => a.decodeAudioData(b)).then(buf => { SND[k] = buf; }).catch(() => {});
   // the AK-47: the creator's real Kalashnikov recording, played the way it was recorded (see burstKit)
   fetch('assets/snd/ak47_real.mp3').then(r => r.ok ? r.arrayBuffer() : Promise.reject())
-    .then(b => a.decodeAudioData(b)).then(buf => { BURST.ak47 = burstKit(buf); }).catch(() => {});
+    .then(b => a.decodeAudioData(b)).then(buf => { BURST.kalash = burstKit(buf); }).catch(() => {});
   // the creator's reload / empty recordings
   for (const [k, file] of [['rifle_mag', 'reloading-weapons.mp3'], ['pistol_rack', 'pistol-loaded-to-fire.mp3'], ['dry', 'dry-fire.mp3']]) fetch('assets/snd/' + file)
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => a.decodeAudioData(b)).then(buf => {
@@ -2689,17 +2714,14 @@ function playSample(name, vol = 1, dist = 0, rate = 1) {
   src.connect(f).connect(g).connect(a.destination); src.start();
   return true;
 }
-// guns without their own recording borrow a close relative at another pitch:
-// Uzi = 9 mm pistol fired fast, double-barrel = shotgun lower and louder, minigun = 7.62 rifle pitched up,
-// launcher / RPG = a deep shotgun "thump" plus a synthetic whoosh
-const SHOT_ALIAS = { zhangomet:['sniper', 1.45, 0.8], uzi:['beretta', 1.08, 0.9], dbshotgun:['shotgun', 0.85, 1.25], minigun:['ak47', 1.18, 0.75], launcher:['shotgun', 0.55, 0.7], rpg:['shotgun', 0.5, 0.8] };
-function playShot(kind, vol = 1, dist = 0) {
+function playShot(kind, vol = 1, dist = 0, sound = weaponSound(kind)) {
   if (vol < 0.03 || MUTED) return;
-  if (kind === 'laser') return playLaser(vol, dist);
-  const [base, rate, gain] = SHOT_ALIAS[kind] || [kind, kind === 'deagle' ? 0.86 : 1, 1]; // .45 pitched down = heavier Deagle boom
-  if (BURST[base]) return playBurstShot(BURST[base], kind + (dist > 0 ? '_far' : ''), vol * gain * 1.25, dist * 0.5, rate);
-  const take = dist > 18 && SND[base + '_far'] ? base + '_far' : base;
   if (kind === 'launcher' || kind === 'rpg') playWhoosh(vol * (kind === 'rpg' ? 1 : 0.5), kind === 'rpg' ? 1.2 : 0.5);
+  let [, base, rate, gain] = SHOT_SOUNDS[sound] || [0, kind, 1, 1];
+  if (base === 'laser') return playLaser(vol, dist);
+  if (BURST[base]) return playBurstShot(BURST[base], kind + (dist > 0 ? '_far' : ''), vol * gain * 1.25, dist * 0.5, rate);
+  if (base === 'kalash') base = 'ak47'; // the burst recording is still loading
+  const take = dist > 18 && SND[base + '_far'] ? base + '_far' : base;
   if (playSample(take, vol * gain, dist * 0.5, rate)) return;
   const a = audio(), src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
   src.buffer = noiseBuf; f.type = 'lowpass';
@@ -3050,7 +3072,8 @@ function loadCfg() {
     const saved = JSON.parse(store.get('ks-cfg', 'null'));
     if (saved) cfg = { ...structuredClone(DEFAULT_CFG), ...saved,
       prices: { ...DEFAULT_CFG.prices, ...saved.prices }, ammoPrices: { ...DEFAULT_CFG.ammoPrices, ...saved.ammoPrices },
-      dmg: { ...DEFAULT_CFG.dmg, ...saved.dmg }, reload: { ...DEFAULT_CFG.reload, ...saved.reload }, names: { ...saved.names } };
+      dmg: { ...DEFAULT_CFG.dmg, ...saved.dmg }, reload: { ...DEFAULT_CFG.reload, ...saved.reload }, sound: { ...DEFAULT_CFG.sound, ...saved.sound },
+      names: { ...saved.names } };
     applyNames();
   } catch {}
 }
@@ -3072,6 +3095,7 @@ function adminHello(conn, m) {
 function adminState() {
   return { t:'admState', room: roomCode, paused: H.paused, cfg, map: mapId,
     maps: Object.entries(MAPS).map(([id, d]) => [id, d.name]),
+    sounds: Object.entries(SHOT_SOUNDS).map(([id, s]) => [id, s[0]]),
     // [key, name, slot (0 = gear), default name] — for the weapons table: name, damage, price, ammo price
     items: [...BUY, 'grenade', 'knife', 'kevlar', 'helmet'].map(k => [k, ITEM_NAME[k], WEAPONS[k]?.slot || 0, DEFAULT_NAMES[k] || ITEM_NAME[k]]),
     players: [...H.players.values()].map(p => ({ id: p.id, name: p.name, team: p.team, money: p.money, k: p.k, d: p.d, bot: !!p.bot, alive: p.alive, hp: p.hp, me: p.id === myId })) };
@@ -3086,7 +3110,7 @@ async function adminCommand(m) {
   const int = v => Math.max(0, Math.round(+v || 0));
   switch (m.cmd) {
     case 'cfg':
-      if (!(m.key in DEFAULT_CFG) || ['map', 'prices', 'ammoPrices', 'dmg', 'reload', 'names'].includes(m.key)) break;
+      if (!(m.key in DEFAULT_CFG) || ['map', 'prices', 'ammoPrices', 'dmg', 'reload', 'sound', 'names'].includes(m.key)) break;
       cfg[m.key] = CFG_BOOL.includes(m.key) ? !!m.value
         : m.key === 'jump' ? THREE.MathUtils.clamp(Math.round((+m.value || 1.3) * 10) / 10, 0.3, 30) // metres, can be fractional
         : int(m.value);
@@ -3097,6 +3121,12 @@ async function adminCommand(m) {
     case 'ammo': if (m.item in cfg.ammoPrices) { cfg.ammoPrices[m.item] = int(m.value); pushCfg(); } break;
     case 'dmg': if (m.item in DEFAULT_DMG) { cfg.dmg[m.item] = Math.min(10000, int(m.value)); pushCfg(); } break;
     case 'reload': if (m.item in DEFAULT_RELOAD) { cfg.reload[m.item] = THREE.MathUtils.clamp(Math.round((+m.value || 0) * 10) / 10, 0.1, 30); pushCfg(); } break;
+    case 'sound': if (m.item in DEFAULT_SOUND && m.value in SHOT_SOUNDS) { cfg.sound[m.item] = m.value; pushCfg(); } break;
+    // "listen" button: the game tab plays the sound (the admin page sits on the same computer), a short burst for automatics
+    case 'hear': if (m.item in DEFAULT_SOUND && m.value in SHOT_SOUNDS) {
+      const w = WEAPONS[m.item], n = w.auto ? 6 : 1;
+      for (let i = 0; i < n; i++) setTimeout(() => playShot(m.item, 0.8, 0, m.value), i * Math.max(w.rate, 0.06) * 1000);
+    } break;
     case 'name': if (WEAPONS[m.item]) { cfg.names[m.item] = String(m.value || '').trim().slice(0, 24); applyNames(); pushCfg(); } break;
     case 'money': setMoney(m.id, m.add !== undefined ? (H.players.get(m.id)?.money ?? 0) + (+m.add || 0) : int(m.value)); break;
     case 'moneyAll': for (const p of H.players.values()) if (!p.bot) p.money = Math.min(cfg.maxMoney, int(m.value)); break;
