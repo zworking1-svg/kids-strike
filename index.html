@@ -272,6 +272,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -516,7 +517,25 @@ function gunMaterial(name, gun) {
   return GUN_MAT.gunmetal;
 }
 const objLoader = new OBJLoader(manager);
-for (const gun of ['ak47','m4','shotgun','deagle','uzi','dbshotgun']) {
+// AK-47: realistic scanned-look model by jeandiz (CGTrader, free) with worn wood and steel PBR textures
+// shrunk to 1K; the FBX's own texture paths point at the author's disk, so the loader is fed a blank pixel for them
+const fbxManager = new THREE.LoadingManager();
+fbxManager.setURLModifier(url => /\.(png|jpe?g|tga|tif)$/i.test(url) ? 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' : url);
+manager.itemStart('ak47.fbx');
+new FBXLoader(fbxManager).load('assets/models/ak47_real/ak47.fbx', o => {
+  const t = (n, srgb) => { const x = texLoader.load(`assets/models/ak47_real/ak47_${n}.jpg`); x.anisotropy = MAX_ANISO; if (srgb) x.colorSpace = THREE.SRGBColorSpace; return x; };
+  const arm = t('arm');
+  const mat = new THREE.MeshStandardMaterial({ map: t('diff', true), normalMap: t('nor'), aoMap: arm, roughnessMap: arm, metalnessMap: arm, roughness: 1, metalness: 1 });
+  const junk = [];
+  o.traverse(c => { if (c.isMesh) c.material = mat; else if (c.isCamera || c.isLight) junk.push(c); });
+  for (const c of junk) c.removeFromParent();
+  // the file lies muzzle along +Z; turn it so the muzzle points along +X like every other gun
+  const g = new THREE.Group(); o.rotation.y = Math.PI / 2; g.add(o);
+  MODELS.ak47 = g;
+  manager.itemEnd('ak47.fbx');
+}, undefined, () => { loadObjGun('ak47'); manager.itemEnd('ak47.fbx'); }); // fall back to the old low-poly one
+for (const gun of ['m4','shotgun','deagle','uzi','dbshotgun']) loadObjGun(gun);
+function loadObjGun(gun) {
   objLoader.load(`assets/models/guns/${gun}.obj`, o => {
     o.traverse(c => {
       if (!c.isMesh) return;
@@ -1148,7 +1167,7 @@ const vm = new THREE.Group(); vmCam.add(vm);
 const vmModels = {}, muzzles = {};
 // where each gun sits on screen: [x, y, z of its centre], small yaw towards the crosshair
 const VM_POSE = {
-  ak47:    [0.17, -0.2,  -0.7,  0.08],
+  ak47:    [0.17, -0.21, -0.8,  0.08],
   m4:      [0.17, -0.2,  -0.68, 0.08],
   shotgun: [0.17, -0.21, -0.76, 0.08],
   sniper:  [0.17, -0.19, -0.83, 0.08],
