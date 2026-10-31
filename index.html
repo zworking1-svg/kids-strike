@@ -2265,6 +2265,28 @@ function loadSounds() {
     .then(b => a.decodeAudioData(b)).then(buf => { SND[v] = buf; }).catch(() => {});
   for (const [k, file] of [['boom_punch', 'boom_punch.flac'], ['boom_tail', 'boom_tail.ogg']]) fetch('assets/snd/' + file)
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => a.decodeAudioData(b)).then(buf => { SND[k] = buf; }).catch(() => {});
+  // real Kalashnikov bursts: each recording gives one close-up AK-47 shot, picked at random so a burst never repeats
+  SND.ak47_takes = [];
+  for (let i = 1; i <= 3; i++) fetch(`assets/snd/ak47_real_${i}.mp3`).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+    .then(b => a.decodeAudioData(b)).then(buf => SND.ak47_takes.push(lastShotOfBurst(buf))).catch(() => {});
+}
+// cut the final shot of a burst together with its natural echo (earlier shots are cut short by the next one),
+// trimmed to 0.9 s with a soft fade and levelled so all takes sound equally loud
+function lastShotOfBurst(buf) {
+  const sr = buf.sampleRate, win = Math.round(sr * 0.01), d0 = buf.getChannelData(0);
+  const env = [];
+  for (let s = 0; s < d0.length; s += win) { let m = 0; for (let j = s; j < Math.min(s + win, d0.length); j++) m = Math.max(m, Math.abs(d0[j])); env.push(m); }
+  const peak = Math.max(...env), onsets = [];
+  for (let k = 1; k < env.length; k++) if (env[k] > peak * 0.5 && env[k - 1] < env[k] * 0.6 && (!onsets.length || k - onsets.at(-1) > 5)) onsets.push(k);
+  const inBurst = onsets.filter((k, i) => i > 0 && k - onsets[i - 1] <= 15);
+  const start = Math.max(0, ((inBurst.at(-1) ?? onsets[0] ?? 0) - 1) * win);
+  const len = Math.min(d0.length - start, Math.round(sr * 0.9)), fade = Math.round(sr * 0.15);
+  const out = audio().createBuffer(buf.numberOfChannels, len, sr);
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const src = buf.getChannelData(c), dst = out.getChannelData(c);
+    for (let i = 0; i < len; i++) dst[i] = src[start + i] / peak * 0.9 * Math.min(1, i / 48, (len - i) / fade);
+  }
+  return out;
 }
 // dist in metres: far shots get quieter and duller, like in a real open space
 function playSample(name, vol = 1, dist = 0, rate = 1) {
@@ -2285,7 +2307,10 @@ function playShot(kind, vol = 1, dist = 0) {
   if (vol < 0.03 || MUTED) return;
   if (kind === 'laser') return playLaser(vol, dist);
   const [base, rate, gain] = SHOT_ALIAS[kind] || [kind, kind === 'deagle' ? 0.86 : 1, 1]; // .45 pitched down = heavier Deagle boom
-  const take = dist > 18 && SND[base + '_far'] ? base + '_far' : base;
+  let take = dist > 18 && SND[base + '_far'] ? base + '_far' : base;
+  if (take === 'ak47' && SND.ak47_takes?.length) {
+    take = 'ak47_take'; SND.ak47_take = SND.ak47_takes[Math.random() * SND.ak47_takes.length | 0];
+  }
   if (kind === 'launcher' || kind === 'rpg') playWhoosh(vol * (kind === 'rpg' ? 1 : 0.5), kind === 'rpg' ? 1.2 : 0.5);
   if (playSample(take, vol * gain, dist * 0.5, rate)) return;
   const a = audio(), src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
@@ -3294,7 +3319,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
