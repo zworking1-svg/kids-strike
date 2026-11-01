@@ -81,6 +81,15 @@
   .buyp { background:var(--panel); backdrop-filter:blur(8px); border-top:3px solid var(--accent); padding:18px 22px; display:flex; flex-wrap:wrap; gap:18px; max-width:94vw; }
   .buyp h2 { width:100%; margin:0; font-size:26px; text-transform:uppercase; letter-spacing:1px; } .buyp h2 small { font-size:15px; color:var(--muted); letter-spacing:0; text-transform:none; margin-left:8px; }
   .buyp h3 { margin:0 0 8px; color:var(--muted); font-size:14px; text-transform:uppercase; letter-spacing:1px; }
+  /* radio: the phrase menu (Z / X) and the line with what was said */
+  #radio { position:absolute; left:14px; top:50%; transform:translateY(-50%); background:var(--panel); backdrop-filter:blur(6px); border-left:3px solid var(--accent); padding:10px 16px 12px; min-width:240px; display:none; pointer-events:auto; }
+  #radio h3 { margin:0 0 6px; font-size:15px; color:var(--accent); text-transform:uppercase; letter-spacing:1px; }
+  #radio div { font-size:19px; font-weight:600; padding:2px 0; cursor:pointer; } #radio div b { color:var(--accent); display:inline-block; width:22px; }
+  #radio div.off { color:var(--muted); cursor:default; } #radio small { display:block; margin-top:6px; color:var(--muted); font-size:13px; }
+  #radiosay { position:absolute; left:50%; bottom:118px; transform:translateX(-50%); display:flex; flex-direction:column; gap:4px; align-items:center; }
+  #radiosay div { background:rgba(0,0,0,.6); padding:4px 14px; font-size:20px; font-weight:700; border-left:3px solid var(--accent); animation:rfade 4.5s forwards; }
+  @keyframes rfade { 0%, 80% { opacity:1; } 100% { opacity:0; } }
+  #tRadio { left:calc(14px + env(safe-area-inset-left)); top:160px; width:50px; height:50px; }
   /* ---- phones and tablets */
   #touchLayer, #joyBase, #joyKnob, #tButtons, #rotate { display:none; }
   body.touch #touchLayer { display:block; position:absolute; inset:0; pointer-events:auto; touch-action:none; }
@@ -181,7 +190,7 @@
       <label>Карта</label>
       <div class="row">
         <button class="mapb sel" data-map="dust">Пустыня</button>
-        <button class="mapb" data-map="mansion">Особняк (cs_mansion)</button>
+        <button class="mapb" data-map="mansion">Замок (cs_mansion)</button>
       </div>
     </div>
     <button class="main" id="go" disabled>Загрузка…</button>
@@ -211,6 +220,7 @@
       <b>ЛКМ</b> огонь &nbsp; <b>ПКМ</b> прицел снайперки &nbsp; <b>R</b> перезарядка<br>
       <b>1</b> нож <b>2</b> пистолет <b>3</b> ПП/дробовик <b>4</b> автомат <b>5</b> пулемёт <b>6</b> лазер <b>7</b> граната <b>8</b> РПГ <b>9</b> винтовка<br>
       <b>E</b> подобрать оружие &nbsp; <b>B</b> магазин (на своей базе)<br>
+      <b>Z</b> радио: команды &nbsp; <b>X</b> радио: ответы — потом цифра <b>1</b>…<b>9</b>, фразу услышат все<br>
       Граната: зажми <b>ЛКМ</b> и отпусти — бросок далеко, <b>ПКМ</b> — под ноги<br>
       <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Деньги: убийство +$500, в голову +$1000, смерть — штраф.
     </div>
@@ -238,6 +248,7 @@
     <div class="tb" id="tCrouch">⤓</div>
     <div class="tb wide" id="tBuy">$ Магазин</div>
     <div class="tb wide" id="tPick">✋ Подобрать</div>
+    <div class="tb" id="tRadio">📻</div>
   </div>
   <div id="roomtag"></div>
   <div id="fps"></div>
@@ -253,6 +264,8 @@
   <div id="buyhint">B — магазин</div>
   <div id="pickhint"></div>
   <div id="nadehint">Чека выдернута — отпусти кнопку, чтобы бросить</div>
+  <div id="radio"></div>
+  <div id="radiosay"></div>
   <div id="hp"><span class="plus">✚</span><span id="hpv">100</span><div class="meter"><div id="hpbar" style="width:100%"></div></div>
     <span id="arm"><span class="shield">⛉</span><span id="armv">0</span><span id="helm">⛑</span></span></div>
   <div id="ammo"><div id="nades"></div><div id="wname">Винтовка</div><div class="num"><span id="ammov">30</span> <small id="ammor">/ 90</small></div></div>
@@ -321,6 +334,7 @@ function applyNames() {
 }
 // damage per hit (out of 100 health); for explosives it is the damage right at the centre of the blast
 const BLAST_DMG = { grenade: 165, launcher: 132, rpg: 231, jerrycan: 82 };
+const JERRYCAN_KILL = 20; // a fuel can blast kills everyone this close (metres)
 const DEFAULT_DMG = { ...Object.fromEntries(Object.entries(WEAPONS).filter(([k]) => !BLAST_DMG[k] || k === 'grenade').map(([k, w]) => [k, w.dmg])), ...BLAST_DMG };
 function weaponDmg(w) { return cfg.dmg?.[w] ?? DEFAULT_DMG[w] ?? WEAPONS[w]?.dmg ?? 20; }
 // seconds to change the magazine, also set per weapon by the admin
@@ -362,12 +376,25 @@ const DEFAULT_CFG = {
   names: {},          // weapon renames, empty = default name
   reload: {},         // filled below with every weapon's default reload time
   sound: {},          // filled below with every weapon's default shot sound
+  radio: null,        // the radio phrases, filled below: { z: [[file, text] × 9], x: [...] }
 };
 DEFAULT_CFG.dmg = { ...DEFAULT_DMG };
 DEFAULT_CFG.reload = { ...DEFAULT_RELOAD };
 DEFAULT_CFG.sound = { ...DEFAULT_SOUND };
+// Radio, like in CS: Z opens the commands, X the answers, a digit says the phrase. Each phrase is a recording of the
+// creator's own voice (assets/snd/voice/, made with the voice/ page) plus the caption everyone sees; the admin panel
+// picks the recording and the caption for every number. A phrase without a recording is shown as a caption only.
+const RADIO_MENUS = { z: 'Команды', x: 'Ответы' };
+const VOICE_DIR = 'assets/snd/voice/';
+DEFAULT_CFG.radio = {
+  z: [['voice_fire.wav', 'Огонь!'], ['voice_grenade.wav', 'Граната!'], ['voice_follow.wav', 'За мной!'], ['voice_cover.wav', 'Прикрой!'],
+    ['voice_reload.wav', 'Перезаряжаю!'], ['voice_enemy.wav', 'Враг!'], ['voice_hurt.wav', 'Ай! Я ранен!'], ['voice_win.wav', 'Победа!'], ['', '']],
+  x: [['', 'Понял!'], ['', 'Нет!'], ['', 'Иду!'], ['', 'Нужна помощь!'], ['', 'Чисто!'], ['', 'Я на месте!'], ['', 'Держим оборону!'], ['', 'Отходим!'], ['', 'Ура!']],
+};
+// a phrase slot from the admin: file name of a recording in VOICE_DIR (or empty) and a caption
+const cleanRadio = ([file, text] = []) => [/^[\w.-]{1,60}\.(wav|mp3|ogg|webm)$/i.test(file || '') ? file : '', String(text || '').trim().slice(0, 40)];
 let cfg = structuredClone(DEFAULT_CFG);
-const TEAM_TINT = { ct:0x9ab8ff, t:0xffd49a };
+const TEAM_TINT = { ct:0x3a3e46, t:0xf4f4f0 }; // uniform colours: black kit for the counter-terrorists, white for the terrorists
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
 const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
 const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3, CROUCH_EYE = 1.0;
@@ -560,14 +587,14 @@ function pbrSet(dir, prefix, variant = '') {
   const arm = t('_arm');
   return new THREE.MeshStandardMaterial({ map: t(variant + '_diff', true), normalMap: t('_nor'), aoMap: arm, roughnessMap: arm, metalnessMap: arm, roughness: 1, metalness: 1 });
 }
-// key = MODELS entry; turn = rotation that points the file's muzzle along +X like every other gun
-function loadFbxGun(key, dir, prefix, turn, keep = () => true, fallback) {
+// key = MODELS entry; turn = rotation (about the file's own axis, y unless given) that points the muzzle along +X like every other gun
+function loadFbxGun(key, dir, prefix, turn, keep = () => true, fallback, axis = 'y') {
   manager.itemStart(key + '.fbx');
   fbxLoader.load(`assets/models/${dir}/${prefix}.fbx`, o => {
     const mat = pbrSet(dir, prefix), junk = [];
     o.traverse(c => { if (c.isMesh) { if (keep(c)) c.material = mat; else junk.push(c); } else if (c.isCamera || c.isLight) junk.push(c); });
     for (const c of junk) c.removeFromParent();
-    const g = new THREE.Group(); o.rotation.y = turn; g.add(o);
+    const g = new THREE.Group(); o.rotation[axis] = turn; g.add(o);
     MODELS[key] = g;
     manager.itemEnd(key + '.fbx');
   }, undefined, () => { fallback?.(); manager.itemEnd(key + '.fbx'); });
@@ -577,9 +604,28 @@ loadFbxGun('ak47', 'ak47_real', 'ak47', Math.PI / 2, undefined, () => loadObjGun
 // M4A1 and Beretta M9 sent by the game's creator; the M4 keeps its silencer, like CS's M4A1-S
 loadFbxGun('m4', 'm4a1', 'm4', Math.PI / 2, undefined, () => loadObjGun('m4'));
 loadFbxGun('m9', 'm9', 'm9', -Math.PI / 2);
-// SWAT operator sent by the game's creator: his arms are the first-person arms (black kit for the
-// counter-terrorists, camo for the terrorists)
-const SWAT_MAT = { ct: pbrSet('swat', 'body', '_black'), t: pbrSet('swat', 'body', '_camo') };
+// Desert Eagle sent by the game's creator (the spare rounds lying in its magazine are left out)
+loadFbxGun('deagle', 'deagle_real', 'deagle', Math.PI, c => !/bullet/i.test(c.name), () => loadObjGun('deagle'), 'z');
+// laser gun sent by the game's creator: dark sci-fi shell with glowing parts (emission map)
+manager.itemStart('lasergun.fbx');
+fbxLoader.load('assets/models/lasergun/lasergun.fbx', o => {
+  const t = (n, srgb) => { const x = texLoader.load(`assets/models/lasergun/laser_${n}.jpg`); x.anisotropy = MAX_ANISO; if (srgb) x.colorSpace = THREE.SRGBColorSpace; return x; };
+  const mat = new THREE.MeshStandardMaterial({ map: t('color', true), normalMap: t('nor'), emissiveMap: t('emit', true), emissive: new THREE.Color(0.4, 2.2, 3), roughness: 0.35, metalness: 0.6 });
+  let src; o.traverse(c => { if (c.isMesh && !src) src = c; });
+  // In the file's own axes the gun stands on Z (up) with its barrel leaning 24° off +Y: straighten the barrel,
+  // then turn Y -> X (muzzle along +X like every other gun) and Z -> Y (upright).
+  const m = new THREE.Mesh(src.geometry, mat); m.rotation.z = -0.4207;
+  const turn = new THREE.Group(); turn.add(m);
+  turn.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
+  const g = new THREE.Group(); g.add(turn);
+  MODELS.lasergun = g;
+  manager.itemEnd('lasergun.fbx');
+}, undefined, () => manager.itemEnd('lasergun.fbx'));
+// SWAT operator sent by the game's creator: he is every soldier in the game and his arms are the first-person arms.
+// Counter-terrorists wear his black kit, terrorists the same kit painted white.
+const SWAT_MAT = { ct: pbrSet('swat', 'body', '_black'), t: pbrSet('swat', 'body', '_black') };
+SWAT_MAT.t.map = null; SWAT_MAT.t.metalnessMap = null; SWAT_MAT.t.metalness = 0; SWAT_MAT.t.color.set(0xb4b4b0);
+const GEAR_MAT = { ct: new THREE.MeshStandardMaterial({ color: 0x1b1d21, roughness: 0.55, metalness: 0.2 }), t: new THREE.MeshStandardMaterial({ color: 0xbdbdb8, roughness: 0.6, metalness: 0.05 }) };
 manager.itemStart('swat.fbx');
 fbxLoader.load('assets/models/swat/swat.fbx', o => { MODELS.swat = o; manager.itemEnd('swat.fbx'); }, undefined, () => manager.itemEnd('swat.fbx'));
 // hand grenade sent by the game's creator
@@ -592,7 +638,7 @@ fbxLoader.load('assets/models/grenade/grenade.fbx', o => {
   MODELS.grenade = g;
   manager.itemEnd('grenade.fbx');
 }, undefined, () => manager.itemEnd('grenade.fbx'));
-for (const gun of ['shotgun','deagle','uzi','dbshotgun']) loadObjGun(gun);
+for (const gun of ['shotgun','uzi','dbshotgun']) loadObjGun(gun);
 function loadObjGun(gun) {
   objLoader.load(`assets/models/guns/${gun}.obj`, o => {
     o.traverse(c => {
@@ -659,8 +705,11 @@ const MAT = {
 // textures only the mansion uses: loaded the first time that map is played
 const LAZY_MAT = { mplaster: 2.5, parquet: 1.6, grass: 3, brick: 2, patio: 2 };
 const WALL_MAT = { mansion: 'mplaster', inner: 'mplaster', brick: 'brick' };
+// materials made from another texture: [texture, tile size, tint] — the castle's grey stone is the block texture, greyed
+const TINTED_MAT = { castle: ['blocks', 2.2, 0xb9b6ae] };
 function getMat(name) {
   name = WALL_MAT[name] || name;
+  if (!MAT[name] && TINTED_MAT[name]) { const [tex, tile, tint] = TINTED_MAT[name]; MAT[name] = pbr(tex, tile); MAT[name].color.set(tint); MAT[name].customProgramCacheKey = () => 'worlduv' + tile + name; }
   if (!MAT[name]) { MAT[name] = pbr(name, LAZY_MAT[name] || 2); if (name === 'grass') MAT[name].color.set(0x9cc870); } // a greener, well-kept lawn
   return MAT[name];
 }
@@ -681,6 +730,72 @@ function boxGeo(w, h, d, tile) {
 // Each map: an outer border that can't be destroyed (it keeps everyone on the map), block walls that can be shot
 // through and blown up — [x, z, width(x), depth(z), height, material, openings] where an opening is
 // [from, to, bottom, top] in metres along the wall from its left/near end (doors and windows) — floors, props, spawns.
+// ---- cs_mansion's castle, 32×24 m (x −16…16, z −22…2), three storeys: floors at 0, 4.5 and 9 m, a flat roof at 13.5 m
+// behind a crenellated parapet, square towers on the corners. Every storey: a big hall in the middle split by a
+// wall with three doorways, and a narrow wing on each side with the stairs, joined to the hall by two doorways.
+// Stairs: in each wing one flight from the ground floor up to the 1st floor (going north), and next to it one from
+// the 1st to the 2nd floor (going back south); the floors have openings over them, with railings round the edge.
+// Ground floor: the gate (south, to the CT garden), the back door (north, to the T yard), a door in each side wall.
+const CASTLE = (() => {
+  const X = 16, Z0 = -22, Z1 = 2, T = 0.8, IX = X - T / 2, IZ0 = Z0 + T / 2, IZ1 = Z1 - T / 2; // outer walls and their inner faces
+  const LV = [0, 4.5, 9], SLAB = 0.3, ROOF = 13.5, H = 14.5, STEP = 0.3, RUN = 0.4, N = 15; // 15 steps of 30 cm per storey
+  const walls = [], solids = [], flights = [];
+  // solid, indestructible blocks: floors, roof, steps, railings — [x0, y0, z0, x1, y1, z1]
+  const box = (x0, x1, y0, y1, z0, z1, mat, kind) => solids.push({ box: [x0, y0, z0, x1, y1, z1], mat, kind });
+  const crenels = (len, top) => Array.from({ length: Math.floor(len / 2) }, (_, k) => [0.5 + 2 * k, 1.5 + 2 * k, top - 0.5, top]); // a 1 m gap every 2 m
+  const windows = list => LV.flatMap(y => list.map(([a0, a1]) => [a0, a1, y + 1.2, y + 2.7]));
+  const frontBack = windows([[3.5,4.5],[7.5,8.5],[11.5,12.5],[19.5,20.5],[23.5,24.5],[27.5,28.5]]);
+  const sides = windows([[7.5,8.5],[11.5,12.5],[15.5,16.5],[19.5,20.5]]);
+  walls.push([0, Z1, 2 * X, T, H, 'castle', [[15, 17, 0, 2.8], ...frontBack, ...crenels(2 * X, H)]]); // front, with the gate
+  walls.push([0, Z0, 2 * X, T, H, 'castle', [[15, 17, 0, 2.8], ...frontBack, ...crenels(2 * X, H)]]); // back, with the door to the yard
+  for (const sx of [-1, 1]) walls.push([sx * X, (Z0 + Z1) / 2, T, Z1 - Z0, H, 'castle', [[3, 5, 0, 2.6], ...sides, ...crenels(Z1 - Z0, H)]]);
+  for (const sx of [-1, 1]) for (const z of [Z0, Z1]) walls.push([sx * X, z, 5, 5, 17.5, 'castle', crenels(5, 17.5)]); // corner towers
+  // inside, on every storey: the wing walls and the wall across the hall (plaster partitions, up to the ceiling)
+  for (const y of LV) {
+    for (const sx of [-1, 1]) walls.push([sx * 9.5, (IZ0 + IZ1) / 2, 0.3, IZ1 - IZ0, 4.2, 'inner', [[4.6, 6.6, 0, 2.3], [20.1, 22.1, 0, 2.3]], y]);
+    walls.push([0, -12, 18.7, 0.3, 4.2, 'inner', [[3, 4.5, 0, 2.3], [8.35, 10.35, 0, 2.3], [14.2, 15.7, 0, 2.3]], y]);
+  }
+  // a floor covering the whole inside except the openings [x0, x1, z0, z1] over the stairs
+  const slab = (y, holes) => {
+    const xs = [...new Set([-IX, IX, ...holes.flatMap(h => [h[0], h[1]])])].sort((a, b) => a - b);
+    for (let i = 0; i < xs.length - 1; i++) {
+      const xm = (xs[i] + xs[i + 1]) / 2;
+      let z = IZ0;
+      for (const h of [...holes.filter(h => xm > h[0] && xm < h[1]).sort((a, b) => a[2] - b[2]), [0, 0, IZ1, IZ1]]) {
+        if (h[2] > z) box(xs[i], xs[i + 1], y - SLAB, y, z, h[2], 'parquet', 'floor');
+        z = Math.max(z, h[3]);
+      }
+    }
+  };
+  // one flight of stairs: steps from height y, starting at zStart and climbing towards dir (±z); bots use its two ends
+  const flight = (x0, x1, zStart, dir, y) => {
+    for (let i = 0; i < N; i++) { const za = zStart + dir * RUN * i, zb = za + dir * RUN; box(x0, x1, y, y + STEP * (i + 1), Math.min(za, zb), Math.max(za, zb), 'castle', 'stair'); }
+    const xm = (x0 + x1) / 2;
+    flights.push({ a: [xm, y, zStart - dir * 1.3], b: [xm, y + STEP * N, zStart + dir * (RUN * N + 1.3)] }); // ends a step clear of the railings
+  };
+  const holes1 = [], holes2 = [];
+  for (const sx of [-1, 1]) {
+    const xs = (a, b) => sx < 0 ? [a, b] : [-b, -a]; // the east wing is the west one mirrored
+    const rail = (x0, x1, z0, z1, y) => box(...xs(x0, x1), y, y + 1, z0, z1, 'parquet', 'rail');
+    flight(...xs(-IX, -13), -3, -1, LV[0]);      // ground -> 1st floor, along the outer wall
+    flight(...xs(-12.5, -10.5), -9, 1, LV[1]);   // 1st -> 2nd floor, right next to it
+    holes1.push([...xs(-IX, -13), -9, -3]); holes2.push([...xs(-12.5, -10.5), -9, -3]);
+    rail(-12.95, -12.75, -9, -3, LV[1]); rail(-IX, -12.75, -2.95, -2.75, LV[1]);
+    rail(-12.7, -12.5, -9, -3, LV[2]); rail(-10.5, -10.3, -9, -3, LV[2]); rail(-12.7, -10.3, -9.2, -9, LV[2]);
+  }
+  slab(LV[1], holes1); slab(LV[2], holes2);
+  box(-IX, IX, ROOF - SLAB, ROOF, IZ0, IZ1, 'castle', 'roof');
+  // waypoints for the bots: the doorways and the corners round the stairs, so they can find their way between rooms
+  const waypoints = [];
+  for (const y of LV) {
+    for (const sx of [-1, 1]) waypoints.push([sx * 9.5, y, -16], [sx * 9.5, y, -0.5], [sx * 7.5, y, -16], [sx * 7.5, y, -0.5],
+      [sx * 11.5, y, -16], [sx * 11.5, y, -10.6], [sx * 11.5, y, -0.5], [sx * 14.3, y, -10.6], [sx * 14.3, y, -1.2]);
+    waypoints.push([0, y, -12], [-5.6, y, -12], [5.6, y, -12], [0, y, -10], [0, y, -14]);
+  }
+  waypoints.push([0, 0, 2], [0, 0, 4.5], [0, 0, 0], [0, 0, -22], [0, 0, -24.5], [0, 0, -20]); // gate, back door
+  for (const sx of [-1, 1]) waypoints.push([sx * 16, 0, -18], [sx * 18, 0, -18], [sx * 14, 0, -18]); // side doors
+  return { walls, solids, flights, waypoints, levels: LV };
+})();
 const MAPS = {
   dust: {
     name: 'Пустыня', size: 82, borderH: 7, border: 'outer', ground: 'ground', groundMat: 'sand',
@@ -698,27 +813,17 @@ const MAPS = {
     navSkip: (x, z) => Math.abs(x) < 3.5 && Math.abs(z) < 3.5, // closed yard: reachable only through a blown hole
     props: dustProps,
   },
-  // cs_mansion (our own design): a white two-wing villa in a walled garden.
-  // Terrorists hold the house from the service yard behind it, counter-terrorists storm it from the front gate.
+  // cs_mansion (our own design): a grey three-storey stone castle in a walled garden.
+  // Terrorists hold the castle from the service yard behind it, counter-terrorists storm it from the front gate.
   //   north (z−)  service yard (T spawn) — crates, barrels, fuel cans
-  //   middle      the villa 32×24 m: hall, living room (west), dining room (east), library, back corridor, bedroom
+  //   middle      the castle 32×24 m with four corner towers (see CASTLE below)
   //   south (z+)  front garden: fountain, stone path, low brick walls for cover, garden tables (CT spawn at the gate)
   //   sides       narrow side gardens with brick walls, a second way round to the side doors
   mansion: {
-    name: 'Особняк', size: 70, borderH: 3.5, border: 'brick', ground: 'grass', groundMat: 'dirt',
+    name: 'Замок', size: 70, borderH: 3.5, border: 'brick', ground: 'grass', groundMat: 'dirt',
     spawns: { ct: [0, 30], t: [0, -30] },
     walls: [
-      // outer walls of the villa: front door, back door, side doors, windows all round
-      [0, 2, 32, 0.6, 5, 'mansion', [[15,17,0,2.5],[3.5,5,1,2.5],[7,8.5,1,2.5],[11.5,13,1,2.5],[19,20.5,1,2.5],[23.5,25,1,2.5],[27,28.5,1,2.5]]],
-      [0,-22, 32, 0.6, 5, 'mansion', [[15,17,0,2.5],[4,5.5,1,2.5],[9.5,11,1,2.5],[21,22.5,1,2.5],[26.5,28,1,2.5]]],
-      [-16,-10, 0.6, 24, 5, 'mansion', [[4,5.5,1,2.5],[9,10.5,1,2.5],[14,15.5,1,2.5],[18,20,0,2.5]]],
-      [ 16,-10, 0.6, 24, 5, 'mansion', [[4,5.5,1,2.5],[9,10.5,1,2.5],[14,15.5,1,2.5],[18,20,0,2.5]]],
-      // inside: thinner partition walls with doorways
-      [-6, -4, 0.3, 12, 4, 'inner', [[6,8,0,2.3]]],             // hall | living room
-      [ 6, -4, 0.3, 12, 4, 'inner', [[6,8,0,2.3]]],             // hall | dining room
-      [0, -10, 32, 0.3, 4, 'inner', [[4,6,0,2.3],[15,17,0,2.3],[26,28,0,2.3]]], // front rooms | back rooms
-      [-4,-16, 0.3, 12, 4, 'inner', [[3,5,0,2.3]]],             // corridor | library
-      [ 4,-16, 0.3, 12, 4, 'inner', [[3,5,0,2.3]]],             // corridor | bedroom
+      ...CASTLE.walls,
       // front garden: fountain and low brick walls to hide behind
       [0, 14.4, 3.6, 0.4, 0.8, 'low'], [0, 17.6, 3.6, 0.4, 0.8, 'low'], [-1.6, 16, 0.4, 2.8, 0.8, 'low'], [1.6, 16, 0.4, 2.8, 0.8, 'low'],
       [-9, 11, 6, 0.5, 1.2, 'brick'], [9, 11, 6, 0.5, 1.2, 'brick'],
@@ -730,6 +835,7 @@ const MAPS = {
       [-9, -27, 7, 0.5, 1.2, 'brick'], [9, -27, 7, 0.5, 1.2, 'brick'],
     ],
     floors: [[0, -10, 32, 24, 'parquet', 'wood'], [0, 18.5, 3, 31, 'patio', 'stone'], [0, -28, 30, 10, 'patio', 'stone']],
+    solids: CASTLE.solids, flights: CASTLE.flights, waypoints: CASTLE.waypoints, levels: CASTLE.levels,
     models: ['Sofa_01','ArmChair_01','CoffeeTable_01','WoodenTable_01','GothicBed_01','GothicCabinet_01','Shelf_01',
       'potted_plant_01','potted_plant_04','dining_table','ClassicConsole_01','outdoor_table_chair_set_01','planter_box_01'],
     props: mansionProps,
@@ -739,8 +845,8 @@ let mapId = 'dust', MAPDEF = MAPS.dust, mapLoading = false;
 
 // ---- how materials resist (real-life inspired): plaster/adobe is soft, sandstone and brick are hard, thin partitions are weak
 const CELL = 0.5;                                                          // wall block size, metres
-const WALL_HP = { wall: 260, blue: 240, outer: 420, low: 380, trim: 220, mansion: 250, inner: 170, brick: 400 }; // what a block takes before it breaks
-const BLAST_HOLE = { wall: 2.7, blue: 2.7, outer: 2.0, low: 2.3, mansion: 2.7, inner: 3.1, brick: 2.1 }; // hole radius from a grenade, metres (~3 grenades level a whole wall)
+const WALL_HP = { wall: 260, blue: 240, outer: 420, low: 380, trim: 220, mansion: 250, inner: 170, brick: 400, castle: 450 }; // what a block takes before it breaks
+const BLAST_HOLE = { wall: 2.7, blue: 2.7, outer: 2.0, low: 2.3, mansion: 2.7, inner: 3.1, brick: 2.1, castle: 1.9 }; // hole radius from a grenade, metres (~3 grenades level a whole wall)
 // bullet power against walls: bigger calibre chips more and breaks through sooner
 const PEN = { beretta: 14, uzi: 18, m4: 28, ak47: 38, deagle: 55, sniper: 140, zhangomet: 60, shotgun: 8, dbshotgun: 9, laser: 45, minigun: 30, knife: 0 };
 // bullet hole size in metres: 9 mm < 5.56 < 7.62 < .50 AE < sniper round
@@ -748,8 +854,8 @@ const HOLE = { beretta: 0.045, uzi: 0.045, m4: 0.055, ak47: 0.07, minigun: 0.07,
 
 const walls = [];
 class Wall {
-  constructor(id, [x, z, w, d, h, type, openings = []]) {
-    Object.assign(this, { id, x, z, w, d, h, type });
+  constructor(id, [x, z, w, d, h, type, openings = [], y0 = 0]) {
+    Object.assign(this, { id, x, z, w, d, h, type, y0 }); // y0: the floor it stands on (upper storeys of the castle)
     this.along = w >= d ? 'x' : 'z';
     const L = Math.max(w, d);
     this.T = Math.min(w, d);
@@ -790,7 +896,7 @@ class Wall {
   }
   row(c) { return Math.floor(c / this.n); }
   col(c) { return c % this.n; }
-  rowY(j) { return j < this.m ? [j * this.ch, (j + 1) * this.ch] : [this.h, this.h + 0.25]; }
+  rowY(j) { return j < this.m ? [this.y0 + j * this.ch, this.y0 + (j + 1) * this.ch] : [this.y0 + this.h, this.y0 + this.h + 0.25]; }
   cellBox(c, box = new THREE.Box3()) {
     const i = this.col(c), [y0, y1] = this.rowY(this.row(c));
     const a0 = (this.along === 'x' ? this.x - this.w / 2 : this.z - this.d / 2) + i * this.cl, a1 = a0 + this.cl;
@@ -919,7 +1025,7 @@ function registerProp(obj, kind, box) {
     pos0: obj.position.clone(), rot0: obj.rotation.clone(), scale0: obj.scale.clone() });
   obj.traverse(c => { if (c.isMesh) c.userData = { prop: id, mat: PROP_MAT[kind] }; });
 }
-const colliders = [], worldMeshes = [], mapObjects = [];
+const colliders = [], worldMeshes = [], mapObjects = [], mapSolids = [];
 function addCollider(obj) {
   obj.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(obj);
@@ -943,6 +1049,15 @@ function buildMap() {
     const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), getMat(mat));
     f.rotation.x = -Math.PI / 2; f.position.set(x, 0.012, z); f.receiveShadow = true; f.userData = { mat: kind, ground: true };
     scene.add(f); worldMeshes.push(f); mapObjects.push(f);
+  }
+  // the castle's floors, roof, stairs and railings: solid, stop bullets, and nothing breaks them
+  mapSolids.length = 0;
+  for (const { box: [x0, y0, z0, x1, y1, z1], mat, kind } of D.solids || []) {
+    const m = new THREE.Mesh(boxGeo(x1 - x0, y1 - y0, z1 - z0, 2), getMat(mat));
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true;
+    m.userData = { mat: mat === 'parquet' ? 'wood' : 'stone', ground: true };
+    scene.add(m); worldMeshes.push(m); mapObjects.push(m);
+    mapSolids.push({ box: addCollider(m), kind });
   }
   const place = (name, scale, x, y, z, rotY = 0, solid = true) => {
     const o = MODELS[name].clone(true);
@@ -981,40 +1096,41 @@ function dustProps(place) {
     ['metal_jerrycan',1.6,1.5,-4.9,0],['metal_jerrycan',1.6,-1.5,4.9,3.1],['cardboard_box_01',2.2,-36,36,0.8],['cardboard_box_01',2.2,36,-36,2.2]];
   for (const [n, s, x, z, r] of deco) place(n, s, x, 0, z, r, false);
 }
-// the mansion: furnished rooms, a garden and a service yard (furniture is real-world size, scale 1)
+// the castle: a furnished storey on each floor, a garden and a service yard (furniture is real-world size, scale 1)
 function mansionProps(place) {
-  const P = Math.PI, H = Math.PI / 2;
-  // living room (west front): sofa facing a coffee table, two armchairs, plants
-  place('Sofa_01', 1, -11, 0, 0.6, P); place('CoffeeTable_01', 1, -11, 0, -1.6);
-  place('ArmChair_01', 1, -14, 0, -3.5, H); place('ArmChair_01', 1, -8, 0, -3.5, -H);
-  place('Shelf_01', 1, -15.4, 0, -7.5, H); place('potted_plant_01', 1, -15, 0, 1, 0, false); place('potted_plant_04', 1, -7, 0, -9, 0, false);
-  // hall: console under the stairs wall, big plants by the doors
-  place('ClassicConsole_01', 1, 0, 0, -9.5); place('potted_plant_04', 1, -4.8, 0, 1, 0, false); place('potted_plant_04', 1, 4.8, 0, 1, 0, false);
-  place('potted_plant_01', 1, -4.8, 0, -9, 0, false); place('potted_plant_01', 1, 4.8, 0, -9, 0, false);
-  // dining room (east front): long table, cabinets
-  place('dining_table', 1, 11, 0, -4, H); place('GothicCabinet_01', 1, 15.4, 0, -7.5, -H); place('GothicCabinet_01', 1, 15.4, 0, 0, -H);
-  place('potted_plant_01', 1, 7, 0, 1, 0, false);
-  // library (west back): shelves along the walls, reading table, armchair
-  for (const x of [-14.5, -12, -9.5, -7]) place('Shelf_01', 1, x, 0, -21.4);
-  place('Shelf_01', 1, -15.4, 0, -14, H); place('WoodenTable_01', 1, -10, 0, -15.5); place('ArmChair_01', 1, -7, 0, -13, P);
-  // back corridor: plants only, it's the way through
-  place('potted_plant_04', 1, -3, 0, -21, 0, false); place('potted_plant_04', 1, 3, 0, -21, 0, false);
-  // bedroom (east back): bed, cabinet, console, armchair
-  place('GothicBed_01', 1, 11, 0, -19.5); place('GothicCabinet_01', 1, 15.4, 0, -13, -H); place('ClassicConsole_01', 1, 6, 0, -21.4);
-  place('ArmChair_01', 1, 6.5, 0, -12.5, P);
-  // front garden: garden tables, planters along the path, plants by the door
+  const P = Math.PI, H = Math.PI / 2, [G, F1, F2] = CASTLE.levels;
+  // ground floor, great hall: a long table, cabinets on the wing walls, consoles by the cross wall, plants by the gate
+  place('dining_table', 1, 0, G, -5, H); place('GothicCabinet_01', 1, -9.05, G, -4, H); place('GothicCabinet_01', 1, 9.05, G, -4, -H);
+  place('ClassicConsole_01', 1, -7, G, -11.5); place('ClassicConsole_01', 1, 7, G, -11.5);
+  place('potted_plant_04', 1, -2.6, G, 1, 0, false); place('potted_plant_04', 1, 2.6, G, 1, 0, false);
+  // ground floor, back hall: the armoury — crates, barrels and shelves
+  for (const [x, z, rot] of [[-5.5, -17, 0], [5.5, -18, H]]) { place('wooden_military_crate', 1.8, x, G, z, rot); place('wooden_military_crate', 1.8, x + 0.15, G + 0.78, z + 0.1, rot); }
+  place('barrel_03', 1.15, -7.5, G, -20.5); place('barrel_03', 1.15, 7.5, G, -20.5);
+  place('Shelf_01', 1, -4, G, -21.3); place('Shelf_01', 1, 4, G, -21.3);
+  // wings: plants by the stairs
+  for (const sx of [-1, 1]) { place('potted_plant_01', 1, sx * 11, G, 1, 0, false); place('potted_plant_01', 1, sx * 11, G, -20.5, 0, false); }
+  // 1st floor: the library at the back, a sitting room at the front
+  for (const x of [-7.5, -5, 5, 7.5]) place('Shelf_01', 1, x, F1, -21.3);
+  place('WoodenTable_01', 1, 0, F1, -16.5); place('ArmChair_01', 1, -2.5, F1, -15, -H); place('ArmChair_01', 1, 2.5, F1, -15, H);
+  place('Sofa_01', 1, 0, F1, 0.6, P); place('CoffeeTable_01', 1, 0, F1, -1.8); place('ArmChair_01', 1, -3, F1, -3.5, H); place('ArmChair_01', 1, 3, F1, -3.5, -H);
+  place('potted_plant_04', 1, -8.5, F1, 1, 0, false); place('potted_plant_04', 1, 8.5, F1, 1, 0, false);
+  // 2nd floor: the bedroom at the back, the banquet room at the front
+  place('GothicBed_01', 1, 0, F2, -19.2); place('GothicCabinet_01', 1, -9.05, F2, -17, H); place('GothicCabinet_01', 1, 9.05, F2, -17, -H);
+  place('ClassicConsole_01', 1, 5.5, F2, -21.3); place('ArmChair_01', 1, -5, F2, -14, P);
+  place('dining_table', 1, 0, F2, -5, H); place('ClassicConsole_01', 1, -7, F2, -11.5); place('ClassicConsole_01', 1, 7, F2, -11.5);
+  place('potted_plant_01', 1, -8.5, F2, 1, 0, false); place('potted_plant_01', 1, 8.5, F2, 1, 0, false);
+  // front garden: garden tables, planters along the path
   place('outdoor_table_chair_set_01', 1, -20, 0, 18); place('outdoor_table_chair_set_01', 1, 20, 0, 18, P);
   for (const z of [6, 9, 22, 25]) { place('planter_box_01', 1, -2.6, 0, z, H, false); place('planter_box_01', 1, 2.6, 0, z, H, false); }
-  place('potted_plant_04', 1, -2, 0, 3, 0, false); place('potted_plant_04', 1, 2, 0, 3, 0, false);
   // side gardens
   place('outdoor_table_chair_set_01', 1, -29, 0, -2); place('potted_plant_01', 1, 29, 0, 2, 0, false);
-  // service yard behind the house: crates, barrels and fuel cans (careful with those)
-  for (const [x, z, rot] of [[-14,-30,0],[14,-30,H],[-22,-24,H],[22,-25,0],[-3,-32.5,0]]) {
+  // service yard behind the castle: crates, barrels and fuel cans (careful with those)
+  for (const [x, z, rot] of [[-14,-30,0],[14,-30,H],[-22,-27,H],[22,-27,0],[-3,-32.5,0]]) {
     place('wooden_military_crate', 1.8, x, 0, z, rot);
     place('wooden_military_crate', 1.8, x + 0.15, 0.78, z + 0.1, rot);
   }
   for (const [x, z] of [[-17,-33],[17,-33],[-28,-30],[28,-30]]) place('barrel_03', 1.15, x, 0, z);
-  for (const [x, z] of [[-18,-24],[18,-24],[6,-33]]) place('metal_jerrycan', 1.6, x, 0, z, 0.5, false);
+  for (const [x, z] of [[-20,-25.5],[20,-25.5],[6,-33]]) place('metal_jerrycan', 1.6, x, 0, z, 0.5, false);
   place('cardboard_box_01', 2.2, -26, 0, -33, 0.3, false); place('cardboard_box_01', 2.2, 26, 0, -33, 2, false);
 }
 // throws the current map away: walls, props, floors, rubble, decals
@@ -1046,7 +1162,7 @@ async function switchMap(id) {
     lazyGltf.loadAsync(`assets/models/${n}/${n}.gltf`).then(g => { MODELS[n] = g.scene; }).catch(() => { MODELS[n] = new THREE.Group(); })));
   clearMap();
   mapId = id; MAPDEF = MAPS[id];
-  buildMap(); buildNav();
+  buildMap(); buildNav(); buildWaypoints();
   mapLoading = false;
   showCenter('', 0);
   while (pendingWorld.length) clientHandle(pendingWorld.shift());
@@ -1080,6 +1196,12 @@ function moveBody(pos, vel, dt) {
   }
   return onGround;
 }
+// height of whatever you would stand on at (x, z) below height y: the ground, a floor of the castle, a crate…
+function floorY(x, y, z) {
+  let f = 0;
+  for (const b of colliders) if (x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z && b.max.y <= y + 0.05 && b.max.y > f) f = b.max.y;
+  return f;
+}
 const losRay = new THREE.Raycaster();
 function lineOfSight(a, b) {
   const dir = b.clone().sub(a); const dist = dir.length(); dir.normalize();
@@ -1095,18 +1217,27 @@ function nameSprite(name, team) {
   g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(name, 128, 44);
   g.fillStyle = team === 'ct' ? '#a9cbff' : '#ffd08a'; g.fillText(name, 128, 44);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest:false, toneMapped:false, transparent:true }));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest:false, depthWrite:false, toneMapped:false, transparent:true })); // no depth: ambient occlusion would draw a dark wedge round it
   s.scale.set(1.4, 0.35, 1); s.position.y = 2.15; s.renderOrder = 5;
   return s;
 }
-let soldierScale = 1;
+// Every soldier is the creator's SWAT operator. He comes without walk cycles, so he borrows the Idle / Walk / Run
+// clips of the old Mixamo soldier: both share Mixamo's skeleton, so the bone turns fit him as they are
+// (only the turns: the old body's bone moves and scales are in its own units and are dropped).
+let soldierScale = 1, SOLDIER_CLIPS = [];
 function prepareSoldier() {
-  const box = new THREE.Box3().setFromObject(MODELS.soldier.scene);
+  const box = new THREE.Box3().setFromObject(MODELS.swat);
   soldierScale = 1.8 / (box.max.y - box.min.y);
+  const bones = new Set(); MODELS.swat.traverse(o => { if (o.isBone) bones.add(o.name); });
+  SOLDIER_CLIPS = MODELS.soldier.animations.map(c => {
+    const clip = c.clone();
+    clip.tracks = clip.tracks.filter(t => { const [bone, prop] = t.name.split('.'); return bones.has(bone) && prop === 'quaternion'; });
+    return clip;
+  });
 }
 // every gun model is normalised the same way: centred, muzzle along +X, real-world length in metres
 const GUN_SRC = { ak47:'ak47', m4:'m4', shotgun:'shotgun', sniper:'bolt_action_rifle_7_62', zhangomet:'zhangomet', deagle:'deagle', beretta:'m9',
-  uzi:'uzi', dbshotgun:'dbshotgun', laser:'proc_laser', minigun:'proc_minigun', launcher:'proc_launcher', rpg:'proc_rpg' };
+  uzi:'uzi', dbshotgun:'dbshotgun', laser:'lasergun', minigun:'proc_minigun', launcher:'proc_launcher', rpg:'proc_rpg' };
 const GUN_LEN = { ak47:0.88, m4:1.0, shotgun:1.0, sniper:1.15, zhangomet:1.1, deagle:0.27, beretta:0.22, uzi:0.45, dbshotgun:0.8, laser:0.95, minigun:1.0, launcher:0.8, rpg:1.1 };
 // guns nobody gives away for free are built here from simple parts, muzzle along +X like the downloaded ones
 function buildProceduralGuns() {
@@ -1157,7 +1288,7 @@ function buildProceduralGuns() {
   MODELS.proc_rpg = rpg;
 }
 function gunModel(kind) {
-  const m = (MODELS[GUN_SRC[kind]] || MODELS[{ beretta: 'service_pistol' }[kind]]).clone(); // old pistol if the M9 failed to load
+  const m = (MODELS[GUN_SRC[kind]] || MODELS[{ beretta: 'service_pistol', laser: 'proc_laser' }[kind]]).clone(); // stand-ins if a file failed to load
   const box = new THREE.Box3().setFromObject(m);
   const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
   const s = GUN_LEN[kind] / size.x;
@@ -1171,15 +1302,20 @@ const hitMat = new THREE.MeshBasicMaterial({ visible:false });
 function makeAvatar(id, name, team) {
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
-  const model = SkeletonUtils.clone(MODELS.soldier.scene);
+  const model = SkeletonUtils.clone(MODELS.swat);
+  const junk = []; model.traverse(o => { if (o.isMesh && !o.isSkinnedMesh) junk.push(o); }); // his KRISS Vector: the game gives him its own guns
+  for (const o of junk) o.removeFromParent();
   model.scale.setScalar(soldierScale);
   model.traverse(o => {
-    if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); o.material.color.set(TEAM_TINT[team]); }
+    if (!o.isMesh) return;
+    o.castShadow = true; o.frustumCulled = false;
+    o.material = [].concat(o.material).map(m => /body/i.test(m.name) ? SWAT_MAT[team] : /lash/i.test(m.name) ? GEAR_MAT.ct : GEAR_MAT[team]);
+    if (o.material.length === 1) o.material = o.material[0];
   });
   body.add(model);
   const mixer = new THREE.AnimationMixer(model);
   const acts = {};
-  for (const clip of MODELS.soldier.animations) acts[clip.name] = mixer.clipAction(clip);
+  for (const clip of SOLDIER_CLIPS) acts[clip.name] = mixer.clipAction(clip);
   acts.Idle.play();
   // weapon in the right hand
   const hand = model.getObjectByName('mixamorigRightHand');
@@ -1672,7 +1808,7 @@ const LIMB_BONE = { head:'mixamorigHead', larm:'mixamorigLeftArm', rarm:'mixamor
 const gibs = [];
 function makeLimb(part, team) {
   const armor = new THREE.MeshStandardMaterial({ color: TEAM_TINT[team], roughness: 0.6, metalness: 0.2 });
-  armor.color.multiplyScalar(0.55);
+  if (team === 'ct') armor.color.multiplyScalar(0.7);
   const dark = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.7 });
   const flesh = new THREE.MeshStandardMaterial({ color: 0x7a0a0a, roughness: 0.4 });
   const g = new THREE.Group();
@@ -1703,7 +1839,8 @@ function killEffect(avatar, m) {
     const centre = avatar.position.clone(); centre.y += m.part === 'head' ? 1.65 : 1.1;
     spray(centre, dir, m.part === 'head' ? 70 : 45, 3.5, 1.4);
     // a pool spreading under the body
-    setTimeout(() => splat(avatar.position.clone().addScaledVector(dir, 0.8).setY(0), UP, 1.6 + Math.random() * 0.6, 1), 700);
+    const pool = avatar.position.clone().addScaledVector(dir, 0.8); pool.y = floorY(pool.x, avatar.position.y + 0.3, pool.z);
+    setTimeout(() => splat(pool, UP, 1.6 + Math.random() * 0.6, 1), 700);
   }
   if (!cfg.gore) return;
   // a bullet takes off the part it hit; a grenade tears off two or three at once
@@ -1753,9 +1890,10 @@ function updateGore(dt) {
     g.vel.y -= 14 * dt;
     o.position.addScaledVector(g.vel, dt);
     o.rotation.x += g.spin.x * dt; o.rotation.y += g.spin.y * dt; o.rotation.z += g.spin.z * dt;
-    if (o.position.y < rad) {
-      o.position.y = rad;
-      if (Math.abs(g.vel.y) > 1.5 && cfg.blood) splat(o.position.clone().setY(0), UP, 0.3);
+    g.floor ??= floorY(o.position.x, o.position.y, o.position.z);
+    if (o.position.y < g.floor + rad) {
+      o.position.y = g.floor + rad;
+      if (Math.abs(g.vel.y) > 1.5 && cfg.blood) splat(o.position.clone().setY(g.floor), UP, 0.3);
       g.vel.y = Math.abs(g.vel.y) * 0.3; g.vel.x *= 0.6; g.vel.z *= 0.6; g.spin.multiplyScalar(0.5);
     }
     for (const b of colliders) if (b.containsPoint(o.position)) { g.vel.x *= -0.4; g.vel.z *= -0.4; o.position.addScaledVector(g.vel, dt * 2); }
@@ -1889,32 +2027,34 @@ function puff(tex, pos, vel, opts) {
   scene.add(s);
   return { s, vel, age: -(opts.delay || 0), ...opts };
 }
+// The fireball and its smoke are the creator's rendered explosions: two image sequences (64 frames each, packed
+// 8×8 into one picture) played on a square that always faces the camera; each frame just moves the square's texture
+// coordinates, so every explosion shares the one picture. [file, seconds, centre of the blast in the frame
+// (x, y from the bottom), frame width in metres for a full-power grenade]
+const BLAST_FILMS = [['explosion1', 3.4, 0.5, 0.42, 13], ['explosion2', 3.6, 0.5, 0.22, 16]].map(([file, life, cx, cy, size]) => {
+  const tex = texLoader.load(`assets/fx/${file}.png`); tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
+  return { tex, life, cx, cy, size };
+});
+function blastFilm(at, s) {
+  const F = BLAST_FILMS[s >= 1.2 || Math.random() < 0.35 ? 1 : 0]; // big blasts (RPG) get the tall mushroom, the rest mostly the round one
+  const geo = new THREE.PlaneGeometry(1, 1).translate(0.5 - F.cx, 0.5 - F.cy, 0); // the blast's centre sits at `at`
+  const film = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: F.tex, transparent: true, depthWrite: false }));
+  film.position.copy(at); film.scale.setScalar(F.size * Math.cbrt(s)); film.renderOrder = 2;
+  scene.add(film);
+  return { film, age: 0, life: F.life, frame: -1 };
+}
 function explosion(at, s = 1) {
   const parts = [];
   const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
   const sz = Math.sqrt(s); // smaller blasts (fuel cans) are smaller fireballs
+  const floor = floorY(at.x, at.y + 0.3, at.z);
   // blinding flash + light that lights up walls around
   const light = new THREE.PointLight(0xffa040, 0, 30, 1.6); light.position.copy(at).add(v3(0, 1, 0)); scene.add(light);
   parts.push({ light, age: 0, life: 0.5 });
   parts.push(puff(FIRE_TEX, at.clone().add(v3(0, 0.6, 0)), v3(0, 0, 0), { add: true, size: 2, grow: 6, life: 0.14, hdr: 3 }));
-  // fireball: billowing orange clouds pushed outwards and up
-  for (let i = 0; i < 28; i++) {
-    const dir = v3(Math.random() - .5, Math.random() * 1.3 + 0.3, Math.random() - .5).normalize();
-    parts.push(puff(FIRE_TEX, at.clone().addScaledVector(dir, 0.3), dir.multiplyScalar((3 + Math.random() * 6) * sz),
-      { add: false, size: (1 + Math.random()) * sz, grow: 2.5, life: 0.6 + Math.random() * 0.6, drag: 3.5, hdr: 1.6, cool: true }));
-  }
-  // smoke column that keeps rising for a few seconds
-  for (let i = 0; i < 26; i++) {
-    const dir = v3((Math.random() - .5) * 0.7, Math.random() * 0.6, (Math.random() - .5) * 0.7);
-    parts.push(puff(SMOKE_TEX, at.clone().add(v3(0, 1.4, 0)).addScaledVector(dir, 1.2), dir.multiplyScalar(2).add(v3(0, 1.2 + Math.random() * 1.5, 0)),
-      { size: 1.5 + Math.random() * 1.5, grow: 1.1, life: 3.5 + Math.random() * 3, drag: 1.2, delay: 0.12 + Math.random() * 0.25, fade: 0.75 }));
-  }
-  // low dust ring rolling over the ground
-  for (let i = 0; i < 16; i++) {
-    const a = i / 16 * 6.28;
-    parts.push(puff(SMOKE_TEX, at.clone().setY(0.4), v3(Math.cos(a) * 9, 0.3, Math.sin(a) * 9),
-      { size: 1.2, grow: 1.6, life: 1.8, drag: 2.2, fade: 0.55, tint: 0xc9a77a }));
-  }
+  // the fireball rolling up into a smoke cloud (the film has its own dust and smoke)
+  parts.push(blastFilm(at.clone().setY(Math.max(floor, at.y - 0.3)), s));
   // sparks and burning bits
   for (let i = 0; i < 40; i++) {
     const dir = v3(Math.random() - .5, Math.random() * 0.8 + 0.2, Math.random() - .5).normalize();
@@ -1927,15 +2067,15 @@ function explosion(at, s = 1) {
     const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.03 + Math.random() * 0.06), dirtMat);
     m.position.copy(at); m.castShadow = true; scene.add(m);
     const dir = v3(Math.random() - .5, Math.random() + 0.4, Math.random() - .5).normalize();
-    parts.push({ mesh: m, vel: dir.multiplyScalar(5 + Math.random() * 9), age: 0, life: 3, gravity: 14, spin: Math.random() * 15 });
+    parts.push({ mesh: m, vel: dir.multiplyScalar(5 + Math.random() * 9), age: 0, life: 3, gravity: 14, spin: Math.random() * 15, floor });
   }
   // shock wave ring racing along the ground
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 0.85, 0.5), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
-  ring.rotation.x = -Math.PI / 2; ring.position.copy(at).setY(0.08); scene.add(ring);
+  ring.rotation.x = -Math.PI / 2; ring.position.copy(at).setY(floor + 0.08); scene.add(ring);
   parts.push({ ring, age: 0, life: 0.45 });
   // burnt patch left on the ground
   const scorch = new THREE.Mesh(splatGeo, scorchMat); scorch.rotation.x = -Math.PI / 2; scorch.rotation.z = Math.random() * 6.28;
-  scorch.position.copy(at).setY(0.015); scorch.scale.setScalar(3.5); scene.add(scorch); splats.push(scorch);
+  scorch.position.copy(at).setY(floor + 0.015); scorch.scale.setScalar(3.5); scene.add(scorch); splats.push(scorch);
   booms.push(parts);
   // camera shake, flash and push for whoever is close
   const d = camera.position.distanceTo(at);
@@ -1960,13 +2100,25 @@ function updateExplosions(dt) {
         if (p.mesh) { scene.remove(p.mesh); p.mesh.geometry.dispose(); }
         if (p.light) scene.remove(p.light);
         if (p.ring) { scene.remove(p.ring); p.ring.geometry.dispose(); p.ring.material.dispose(); }
+        if (p.film) { scene.remove(p.film); p.film.material.dispose(); p.film.geometry.dispose(); }
         parts.splice(i, 1); continue;
       }
       if (p.light) p.light.intensity = 160 * Math.pow(1 - k, 2);
+      if (p.film) { // next frame of the film; the first moments glow brighter than white so the fireball blooms
+        const f = Math.min(63, Math.floor(k * 64));
+        if (f !== p.frame) {
+          p.frame = f;
+          const u = (f % 8) / 8, v = 1 - (Math.floor(f / 8) + 1) / 8, uv = p.film.geometry.attributes.uv;
+          uv.setXY(0, u, v + 1 / 8); uv.setXY(1, u + 1 / 8, v + 1 / 8); uv.setXY(2, u, v); uv.setXY(3, u + 1 / 8, v); uv.needsUpdate = true;
+        }
+        p.film.quaternion.copy(camera.quaternion);
+        p.film.material.color.setScalar(1 + 2.2 * Math.max(0, 1 - k * 4));
+        p.film.material.opacity = Math.min(1, (1 - k) * 5);
+      }
       if (p.ring) { p.ring.scale.setScalar(0.5 + k * 13); p.ring.material.opacity = 0.22 * (1 - k); }
       if (p.mesh) {
         p.vel.y -= p.gravity * dt; p.mesh.position.addScaledVector(p.vel, dt); p.mesh.rotation.x += p.spin * dt;
-        if (p.mesh.position.y < 0.03) { p.mesh.position.y = 0.03; p.vel.multiplyScalar(0.3); p.vel.y = Math.abs(p.vel.y); p.spin *= 0.5; }
+        if (p.mesh.position.y < p.floor + 0.03) { p.mesh.position.y = p.floor + 0.03; p.vel.multiplyScalar(0.3); p.vel.y = Math.abs(p.vel.y); p.spin *= 0.5; }
       }
       if (p.s) {
         p.s.visible = true;
@@ -2013,7 +2165,8 @@ function playExplosion(dist, s = 1) {
   const verbGain = a.createGain(); verbGain.gain.value = 0.3 + Math.min(0.5, dist * 0.012);
   verb.connect(verbGain).connect(comp);
   const route = (node, dry, wet) => { const g1 = a.createGain(), g2 = a.createGain(); g1.gain.value = dry; g2.gain.value = wet; node.connect(g1).connect(master); node.connect(g2).connect(verb); };
-  for (const [name, vol, rate] of [['boom_punch', 1.0, 0.85], ['boom_tail', 0.9, 0.8]]) {
+  // the creator's explosion recording; the old punch + rumble pair only while it is still loading
+  for (const [name, vol, rate] of SND.boom_rec ? [['boom_rec', 1.1, 1]] : [['boom_punch', 1.0, 0.85], ['boom_tail', 0.9, 0.8]]) {
     if (!SND[name]) continue;
     const s = a.createBufferSource(); s.buffer = SND[name]; s.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
     route(s, vol, vol * 0.7); s.start(t0);
@@ -2059,14 +2212,14 @@ function spawnDrop(did, w, p) {
   const gun = gunModel(w); gun.rotation.z = 0.15; g.add(gun);
   const ring = new THREE.Mesh(new THREE.CircleGeometry(0.55, 24), DROP_GLOW); ring.rotation.x = -Math.PI / 2; ring.position.y = -0.17;
   g.add(ring);
-  g.position.set(p[0], 0.2, p[2]); g.rotation.y = Math.random() * 6.28;
+  g.position.set(p[0], (p[1] || 0) + 0.2, p[2]); g.rotation.y = Math.random() * 6.28;
   scene.add(g);
   dropMeshes.set(did, { g, w, p, asked: 0, phase: Math.random() * 6 });
 }
 function removeDrop(did) { const d = dropMeshes.get(did); if (d) { scene.remove(d.g); dropMeshes.delete(did); } }
 function nearestDrop() {
   let best = null, bd = 1.6;
-  for (const [did, d] of dropMeshes) { const dist = Math.hypot(d.p[0] - me.pos.x, d.p[2] - me.pos.z); if (dist < bd) { bd = dist; best = { did, ...d }; } }
+  for (const [did, d] of dropMeshes) { const dist = Math.hypot(d.p[0] - me.pos.x, d.p[2] - me.pos.z); if (dist < bd && Math.abs((d.p[1] || 0) - me.pos.y) < 1.5) { bd = dist; best = { did, ...d }; } }
   return best;
 }
 function pickUp(swap) {
@@ -2079,7 +2232,7 @@ function pickUp(swap) {
   sendToHost({ t:'pick', did: d.did, swap: have || undefined });
 }
 function updateDrops(dt, t) {
-  for (const d of dropMeshes.values()) { d.g.rotation.y += dt * 0.9; d.g.position.y = 0.22 + Math.sin(t * 2 + d.phase) * 0.04; }
+  for (const d of dropMeshes.values()) { d.g.rotation.y += dt * 0.9; d.g.position.y = (d.p[1] || 0) + 0.22 + Math.sin(t * 2 + d.phase) * 0.04; }
   const d = started && me.alive ? nearestDrop() : null;
   let hint = '';
   if (d) {
@@ -2202,7 +2355,7 @@ function playImpact(mat, vol) {
 
 // ---- flying and falling pieces with simple physics: gravity, bounce, friction, coming to rest
 const debris = [];
-const ROCK_COLOR = { wall: 0xcbb894, blue: 0x7f9bb8, outer: 0xc4a678, low: 0xd8c49a, trim: 0x9a9690, mansion: 0xe9e5dc, inner: 0xe9e5dc, brick: 0x9a4a35 };
+const ROCK_COLOR = { wall: 0xcbb894, blue: 0x7f9bb8, outer: 0xc4a678, low: 0xd8c49a, trim: 0x9a9690, mansion: 0xe9e5dc, inner: 0xe9e5dc, brick: 0x9a4a35, castle: 0xa8a296 };
 const rockMats = {};
 const rockMat = type => rockMats[type] ||= new THREE.MeshStandardMaterial({ color: ROCK_COLOR[type] || 0xbbbbbb, roughness: 0.95, flatShading: true });
 function addDebris(mesh, vel, spin, opts = {}) {
@@ -2407,7 +2560,7 @@ function playFireSound(at, secs) {
 
 // ---- HOST: decides what breaks and tells everyone (so every computer sees the same holes and ruins)
 const worldRay = new THREE.Raycaster();
-function hostShotWorld(o, e, w) {
+function hostShotWorld(o, e, w, from = null) {
   const O = new THREE.Vector3(...o), E = new THREE.Vector3(...e), dir = E.clone().sub(O), len = dir.length();
   if (len < 0.01) return;
   dir.normalize();
@@ -2420,7 +2573,7 @@ function hostShotWorld(o, e, w) {
       if (c !== undefined) { wall.hp[c] -= pen; if (wall.hp[c] <= 0) hostBreakWall(wall, [c], null, []); }
     } else if (ud.prop !== undefined) {
       const p = props[ud.prop];
-      if (p.alive && p.hp !== Infinity) { p.hp -= pen * (p.kind === 'cardboard' ? 2 : 1); if (p.hp <= 0) hostBreakProp(p, null, 'shot', null); }
+      if (p.alive && p.hp !== Infinity) { p.hp -= pen * (p.kind === 'cardboard' ? 2 : 1); if (p.hp <= 0) hostBreakProp(p, null, 'shot', from); } // whoever shot a fuel can owns its blast
     }
     if (!WEAPONS[w]?.pen || stopsBullets(hit)) break;
   }
@@ -2468,10 +2621,17 @@ function hostBreakProp(p, at, how, from) {
   hostBroadcast({ t:'prop', id: p.id, act, at, how });
   for (const [id, dy] of drops) hostBroadcast({ t:'prop', id, act:'drop', dy });
   if (act === 'boom') {
-    // a fuel can goes up in a fireball and keeps burning — and can set off more cans nearby
+    // a fuel can goes up in a fireball and keeps burning — and can set off more cans nearby.
+    // Nobody survives it: everyone within JERRYCAN_KILL metres dies on the spot, walls or no walls.
     const c = p.box.getCenter(new THREE.Vector3());
     setTimeout(() => {
       hostBlast(c, from, { power: 0.5, radius: 6, w: 'jerrycan' });
+      for (const v of [...H.players.values()]) {
+        const body = new THREE.Vector3(v.p[0], v.p[1] + 1, v.p[2]);
+        if (!v.alive || body.distanceTo(c) > JERRYCAN_KILL) continue;
+        const dir = body.clone().sub(c).normalize();
+        hostDamage(from, v.id, Infinity, 'blast', 'jerrycan', [body.x, body.y, body.z], [dir.x, dir.y, dir.z], [c.x, c.y, c.z]);
+      }
       hostFire(c, from, 6);
     }, 120 + Math.random() * 150);
   }
@@ -2637,7 +2797,7 @@ function loadSounds() {
   // guns with their own recordings
   for (const g of ['ak47','m4','shotgun','sniper','deagle','beretta']) for (const v of [g, g + '_far']) fetch(`assets/snd/${v}.wav`).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
     .then(b => a.decodeAudioData(b)).then(buf => { SND[v] = buf; }).catch(() => {});
-  for (const [k, file] of [['boom_punch', 'boom_punch.flac'], ['boom_tail', 'boom_tail.ogg']]) fetch('assets/snd/' + file)
+  for (const [k, file] of [['boom_punch', 'boom_punch.flac'], ['boom_tail', 'boom_tail.ogg'], ['boom_rec', 'explosion.mp3']]) fetch('assets/snd/' + file)
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => a.decodeAudioData(b)).then(buf => { SND[k] = buf; }).catch(() => {});
   // the AK-47: the creator's real Kalashnikov recording, played the way it was recorded (see burstKit)
   fetch('assets/snd/ak47_real.mp3').then(r => r.ok ? r.arrayBuffer() : Promise.reject())
@@ -2873,7 +3033,7 @@ function showErr(t) { $('#err').textContent = t; $('#err2').textContent = t; }
 const H = { players: new Map(), bots: [], snapTimer: 0, winLock: false, paused: false, drops: new Map() };
 let dropSeq = 0;
 function hostDrop(w, pos) {
-  const d = { did: 'd' + (dropSeq++), w, p: [+pos[0].toFixed(2), 0, +pos[2].toFixed(2)], t: now() };
+  const d = { did: 'd' + (dropSeq++), w, p: [+pos[0].toFixed(2), +floorY(pos[0], pos[1] + 0.5, pos[2]).toFixed(2), +pos[2].toFixed(2)], t: now() };
   H.drops.set(d.did, d);
   hostBroadcast({ t:'drop', did: d.did, w, p: d.p });
 }
@@ -2933,7 +3093,7 @@ function hostHandle(from, m) {
   else if (m.t === 'shot') {
     if (!p.alive) return;
     hostBroadcast({ t:'shot', id: from, o: m.o, e: m.e, es: m.es, w: m.w }, from);
-    for (const e of m.es || [m.e]) hostShotWorld(m.o, e, m.w); // bullets wear down walls and props
+    for (const e of m.es || [m.e]) hostShotWorld(m.o, e, m.w, from); // bullets wear down walls and props
   }
   else if (m.t === 'hit') {
     const w = WEAPONS[m.w]; if (!w || !p.alive) return;
@@ -2974,6 +3134,13 @@ function hostHandle(from, m) {
     if (WEAPONS[m.swap] && WEAPONS[m.swap].slot === WEAPONS[d.w].slot && m.swap !== d.w) hostDrop(m.swap, p.p);
     hostSend(from, { t:'got', w: d.w });
   }
+  else if (m.t === 'radio') {
+    // a radio phrase: everyone hears it and sees the caption (at most one every 1.5 s per player, so nobody spams it)
+    const ph = cfg.radio?.[m.menu]?.[m.i];
+    if (!p.alive || !ph || !(ph[0] || ph[1]) || now() - (p.radioT || 0) < 1.5) return;
+    p.radioT = now();
+    hostBroadcast({ t:'radio', id: from, name: p.name, team: p.team, file: ph[0], text: ph[1] || '…' });
+  }
   else if (m.t === 'proj') {
     if (!p.alive || !WEAPONS[m.w]?.proj) return;
     p.w = m.w;
@@ -2981,20 +3148,22 @@ function hostHandle(from, m) {
   }
 }
 // src = where the damage came from (shooter, or the grenade blast) — bodies fall and limbs fly away from it
+// dmg = Infinity kills outright: no armour, no friendly-fire rule (the fuel can blast)
 function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
-  const a = H.players.get(fromId), v = H.players.get(targetId);
+  const v = H.players.get(targetId), a = H.players.get(fromId) || v; // nobody to blame (a can set off by another can's fire…): it counts as your own death
   if (!a || !v || !v.alive || H.winLock) return;
-  if (a === v && !['grenade', 'launcher', 'rpg', 'jerrycan'].includes(w)) return; // only your own explosions can hurt you
-  if (a !== v && a.team === v.team && !cfg.ff) return;
+  const lethal = dmg === Infinity;
+  if (a === v && !lethal && !['grenade', 'launcher', 'rpg', 'jerrycan'].includes(w)) return; // only your own explosions can hurt you
+  if (a !== v && a.team === v.team && !cfg.ff && !lethal) return;
   // armour: vest protects body and arms, helmet the head; how much gets through depends on the gun
   const covered = part === 'head' ? v.helmet : part !== 'lleg' && part !== 'rleg';
-  if (v.armor > 0 && covered) {
+  if (v.armor > 0 && covered && !lethal) {
     const ap = WEAPONS[w]?.ap ?? 0.8;
     v.armor = Math.max(0, v.armor - Math.round(dmg * (1 - ap) / 2));
     dmg *= ap;
     if (v.armor === 0) v.helmet = false;
   }
-  dmg = Math.max(1, Math.round(dmg));
+  dmg = lethal ? v.hp : Math.max(1, Math.round(dmg));
   v.hp = Math.max(0, v.hp - dmg);
   if (!v.bot) hostSend(v.id, { t:'dmg', hp: v.hp, armor: v.armor, helmet: v.helmet });
   hostBroadcast({ t:'bl', id: v.id, part, pt, dir, big: v.hp <= 0 });
@@ -3073,7 +3242,8 @@ function loadCfg() {
     if (saved) cfg = { ...structuredClone(DEFAULT_CFG), ...saved,
       prices: { ...DEFAULT_CFG.prices, ...saved.prices }, ammoPrices: { ...DEFAULT_CFG.ammoPrices, ...saved.ammoPrices },
       dmg: { ...DEFAULT_CFG.dmg, ...saved.dmg }, reload: { ...DEFAULT_CFG.reload, ...saved.reload }, sound: { ...DEFAULT_CFG.sound, ...saved.sound },
-      names: { ...saved.names } };
+      names: { ...saved.names },
+      radio: Object.fromEntries(Object.keys(RADIO_MENUS).map(k => [k, DEFAULT_CFG.radio[k].map((d, i) => saved.radio?.[k]?.[i] ? cleanRadio(saved.radio[k][i]) : d)])) };
     applyNames();
   } catch {}
 }
@@ -3110,7 +3280,7 @@ async function adminCommand(m) {
   const int = v => Math.max(0, Math.round(+v || 0));
   switch (m.cmd) {
     case 'cfg':
-      if (!(m.key in DEFAULT_CFG) || ['map', 'prices', 'ammoPrices', 'dmg', 'reload', 'sound', 'names'].includes(m.key)) break;
+      if (!(m.key in DEFAULT_CFG) || ['map', 'prices', 'ammoPrices', 'dmg', 'reload', 'sound', 'names', 'radio'].includes(m.key)) break;
       cfg[m.key] = CFG_BOOL.includes(m.key) ? !!m.value
         : m.key === 'jump' ? THREE.MathUtils.clamp(Math.round((+m.value || 1.3) * 10) / 10, 0.3, 30) // metres, can be fractional
         : int(m.value);
@@ -3127,6 +3297,8 @@ async function adminCommand(m) {
       const w = WEAPONS[m.item], n = w.auto ? 6 : 1;
       for (let i = 0; i < n; i++) setTimeout(() => playShot(m.item, 0.8, 0, m.value), i * Math.max(w.rate, 0.06) * 1000);
     } break;
+    // radio phrase for one number of the Z or X menu: recording + caption
+    case 'radio': if (RADIO_MENUS[m.menu] && m.i >= 0 && m.i < 9) { cfg.radio[m.menu][m.i] = cleanRadio([m.file, m.text]); pushCfg(); } break;
     case 'name': if (WEAPONS[m.item]) { cfg.names[m.item] = String(m.value || '').trim().slice(0, 24); applyNames(); pushCfg(); } break;
     case 'money': setMoney(m.id, m.add !== undefined ? (H.players.get(m.id)?.money ?? 0) + (+m.add || 0) : int(m.value)); break;
     case 'moneyAll': for (const p of H.players.values()) if (!p.bot) p.money = Math.min(cfg.maxMoney, int(m.value)); break;
@@ -3185,13 +3357,82 @@ $('#adminBtn').onclick = () => window.open(adminUrl(), '_blank');
 setInterval(adminRefresh, 1000); // keep money and scores on the admin page fresh
 
 // ---------- bots (run only on the host)
+// places bots wander to: a 3 m grid on the ground and on every upper floor of the map, minus anything in the way
 const NAV = [];
 function buildNav() {
   const lim = MAPDEF.size / 2 - 4;
-  for (let x = -lim; x <= lim; x += 3) for (let z = -lim; z <= lim; z += 3) {
-    const p = new THREE.Vector3(x, 0, z);
-    if (!MAPDEF.navSkip?.(x, z) && !colliders.some(b => b.min.y < 1 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
+  for (const y of MAPDEF.levels || [0]) for (let x = -lim; x <= lim; x += 3) for (let z = -lim; z <= lim; z += 3) {
+    if (y > 0 && !mapSolids.some(s => s.kind === 'floor' && Math.abs(s.box.max.y - y) < 0.05 && x > s.box.min.x + 0.5 && x < s.box.max.x - 0.5 && z > s.box.min.z + 0.5 && z < s.box.max.z - 0.5)) continue;
+    const p = new THREE.Vector3(x, y, z);
+    if (!MAPDEF.navSkip?.(x, z) && !colliders.some(b => b.min.y < y + 1 && b.max.y > y + 0.35 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
   }
+}
+// Waypoints the bots route through when a wall is in the way (the castle's doorways): which ones see each other.
+const WP = [];
+function buildWaypoints() {
+  scene.updateMatrixWorld(true); // the map was just built and not drawn yet: rays need its blocks where they really are
+  WP.length = 0;
+  for (const p of MAPDEF.waypoints || []) WP.push({ p: new THREE.Vector3(...p), next: [] });
+  for (let i = 0; i < WP.length; i++) for (let j = i + 1; j < WP.length; j++) {
+    const a = WP[i], b = WP[j];
+    if (Math.abs(a.p.y - b.p.y) < 1 && walkable(a.p, b.p)) { const d = a.p.distanceTo(b.p); a.next.push([j, d]); b.next.push([i, d]); }
+  }
+}
+// nothing in the way at knee and chest height
+const _wa = new THREE.Vector3(), _wb = new THREE.Vector3();
+function walkable(a, b) {
+  for (const h of [0.5, 1.3]) if (!lineOfSight(_wa.copy(a).setY(a.y + h), _wb.copy(b).setY(b.y + h))) return false;
+  return true;
+}
+// where to walk to get from `from` to `to` on the same storey: straight there if nothing is in the way,
+// else to the first waypoint of the shortest route through the waypoints
+function pathVia(from, to) {
+  if (!WP.length || walkable(from, to)) return to;
+  const lv = levelOf(from.y), dist = WP.map(() => Infinity), prev = WP.map(() => -1), done = WP.map(() => false);
+  WP.forEach((w, i) => { if (levelOf(w.p.y) === lv && walkable(from, w.p)) dist[i] = from.distanceTo(w.p); });
+  let best = -1, bestD = Infinity;
+  for (;;) {
+    let i = -1; for (let k = 0; k < WP.length; k++) if (!done[k] && dist[k] < Infinity && (i < 0 || dist[k] < dist[i])) i = k;
+    if (i < 0 || dist[i] >= bestD) break;
+    done[i] = true;
+    if (walkable(WP[i].p, to)) { const d = dist[i] + WP[i].p.distanceTo(to); if (d < bestD) { bestD = d; best = i; } }
+    for (const [j, d] of WP[i].next) if (dist[i] + d < dist[j]) { dist[j] = dist[i] + d; prev[j] = i; }
+  }
+  if (best < 0) return to;
+  while (prev[best] >= 0) best = prev[best];
+  return WP[best].p;
+}
+// which storey a height is on (0 = ground)
+const levelOf = y => (MAPDEF.levels || [0]).filter(l => l <= y + 1).length - 1;
+// A bot whose goal is on another storey walks to the nearest flight of stairs that leads that way, climbs (or goes down)
+// it end to end, and carries on from there; returns the point to walk towards right now.
+function botWaypoint(b) {
+  const target = botTarget(b);
+  if (b.route?.on) return target; // on the stairs: straight up (or down) them
+  // round the walls: re-plan every 1.5 s, or as soon as the waypoint is reached
+  if (b.viaFor !== target || now() > b.viaT || Math.hypot(b.via.x - b.pos.x, b.via.z - b.pos.z) < 0.8) {
+    b.via = pathVia(b.pos, target); b.viaFor = target; b.viaT = now() + 1.5;
+  }
+  return b.via;
+}
+function botTarget(b) {
+  const lv = levelOf(b.pos.y), gl = levelOf(b.goal.y);
+  if (lv === gl || !MAPDEF.flights) { b.route = null; return b.goal; }
+  if (!b.route || b.route.lv !== lv) {
+    const up = gl > lv;
+    let best = null, bd = Infinity;
+    for (const f of MAPDEF.flights) {
+      const [from, to] = up ? [f.a, f.b] : [f.b, f.a];
+      if (levelOf(from[1]) !== lv) continue;
+      const d = Math.hypot(from[0] - b.pos.x, from[2] - b.pos.z);
+      if (d < bd) { bd = d; best = { lv, from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), on: false }; }
+    }
+    if (!best) { b.goal = null; return b.pos; }
+    b.route = best;
+  }
+  const r = b.route;
+  if (!r.on && Math.hypot(r.from.x - b.pos.x, r.from.z - b.pos.z) < 0.8) r.on = true;
+  return r.on ? r.to : r.from;
 }
 let botSeq = 0;
 function addBot(team) {
@@ -3235,7 +3476,7 @@ function botThink(b, dt) {
       const hit = Math.random() < acc;
       const end = hit ? target : target.clone().add(new THREE.Vector3((Math.random()-.5)*2, (Math.random()-.5)*1.5, (Math.random()-.5)*2));
       hostBroadcast({ t:'shot', id: b.id, o: [eye.x, eye.y, eye.z], e: [end.x, end.y, end.z], w: b.w });
-      hostShotWorld([eye.x, eye.y, eye.z], [end.x, end.y, end.z], b.w);
+      hostShotWorld([eye.x, eye.y, eye.z], [end.x, end.y, end.z], b.w, b.id);
       if (hit) {
         const roll = Math.random();
         const part = roll < [0.05, 0.08, 0.14][lvl] ? 'head' : roll < 0.6 ? 'body' : ['larm','rarm','lleg','rleg'][Math.floor(Math.random() * 4)];
@@ -3245,8 +3486,9 @@ function botThink(b, dt) {
     }
   } else {
     b.seen = null;
-    if (!b.goal || b.goal.distanceTo(b.pos) < 1.5) b.goal = NAV[Math.floor(Math.random()*NAV.length)];
-    const dx = b.goal.x - b.pos.x, dz = b.goal.z - b.pos.z, l = Math.hypot(dx, dz) || 1;
+    if (!b.goal || b.goal.distanceTo(b.pos) < 1.5) { b.goal = NAV[Math.floor(Math.random()*NAV.length)]; b.route = null; }
+    const aim = botWaypoint(b);
+    const dx = aim.x - b.pos.x, dz = aim.z - b.pos.z, l = Math.hypot(dx, dz) || 1;
     const want = Math.atan2(-dx, -dz);
     const diff = ((want - b.yaw + Math.PI*3) % (Math.PI*2)) - Math.PI;
     b.yaw += diff * Math.min(1, dt * 6);
@@ -3407,7 +3649,47 @@ function clientHandle(m) {
       beep(523, .2, .15, 'triangle'); setTimeout(() => beep(659, .2, .15, 'triangle'), 200); setTimeout(() => beep(784, .4, .15, 'triangle'), 400);
       break;
     case 'info': addFeed(esc(m.text)); break;
+    case 'radio': {
+      const line = document.createElement('div');
+      line.innerHTML = `📻 <span class="n-${m.team}">${esc(m.name)}</span>: ${esc(m.text)}`;
+      $('#radiosay').appendChild(line); setTimeout(() => line.remove(), 4600);
+      while ($('#radiosay').childElementCount > 3) $('#radiosay').firstChild.remove();
+      if (m.file) playVoice(m.file);
+      break;
+    }
   }
+}
+// ---- radio
+const VOICE = {}; // file -> decoded recording (a promise while it loads; null if there is no such file)
+function loadVoice(file) {
+  return VOICE[file] ??= fetch(VOICE_DIR + file).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+    .then(b => audio().decodeAudioData(b)).catch(() => null);
+}
+async function playVoice(file, vol = 1) {
+  if (MUTED) return false;
+  const buf = await loadVoice(file);
+  if (!buf) return false;
+  const a = audio(), s = a.createBufferSource(), g = a.createGain();
+  s.buffer = buf; g.gain.value = vol; s.connect(g).connect(a.destination); s.start();
+  return true;
+}
+let radioMenu = null, radioT = 0;
+function openRadio(menu) {
+  if (!menu || radioMenu === menu || !me.alive) return closeRadio();
+  radioMenu = menu; clearTimeout(radioT); radioT = setTimeout(closeRadio, 6000);
+  const list = cfg.radio?.[menu] || [];
+  $('#radio').innerHTML = `<h3>📻 Радио — ${RADIO_MENUS[menu]}</h3>` +
+    list.map(([file, text], i) => `<div data-i="${i}" class="${file || text ? '' : 'off'}"><b>${i + 1}</b>${esc(text || (file ? '…' : '—'))}</div>`).join('') +
+    `<small>${IS_TOUCH ? 'нажми на фразу' : 'цифра — сказать, ' + menu.toUpperCase() + ' или 0 — закрыть'}</small>`;
+  $('#radio').querySelectorAll('[data-i]').forEach(d => d.onclick = () => sayRadio(+d.dataset.i));
+  $('#radio').style.display = 'block';
+  if (!MUTED) for (const [file] of list) if (file) loadVoice(file); // get the recordings ready, so the phrase sounds right away
+}
+function closeRadio() { radioMenu = null; clearTimeout(radioT); $('#radio').style.display = 'none'; }
+function sayRadio(i) {
+  const menu = radioMenu; closeRadio();
+  const ph = cfg.radio?.[menu]?.[i];
+  if (ph && (ph[0] || ph[1])) sendToHost({ t:'radio', menu, i });
 }
 // "+$500 убийство" / "−$2700 AK-47" next to the money counter
 function moneyPopup(amount, label) {
@@ -3534,6 +3816,7 @@ if (IS_TOUCH) {
   hold('#tPick', () => pickUp(true));
   hold('#tScore', () => { showBoard = true; }, () => { showBoard = false; });
   hold('#tPause', () => setPlaying(false));
+  hold('#tRadio', () => openRadio(radioMenu === 'z' ? 'x' : radioMenu === 'x' ? null : 'z')); // tap: commands, again: answers, again: close
   // phones should be held sideways
   const orient = () => { $('#rotate').style.display = innerHeight > innerWidth ? 'flex' : 'none'; };
   addEventListener('resize', orient); orient();
@@ -3577,6 +3860,8 @@ addEventListener('keydown', e => {
     if (e.code === 'Escape') toggleBuy(false);
     return;
   }
+  if (e.code === 'KeyZ' || e.code === 'KeyX') { openRadio(e.code === 'KeyZ' ? 'z' : 'x'); return; }
+  if (radioMenu && e.code.startsWith('Digit')) { n >= 1 && n <= 9 ? sayRadio(n - 1) : closeRadio(); return; } // while the radio menu is open, digits pick a phrase
   if (n >= 1 && n <= 9) selectSlot(n);
   if (e.code === 'KeyG' && me.nades > 0) selectSlot(7);
   if (e.code === 'KeyR') startReload();
@@ -3732,7 +4017,7 @@ manager.onLoad = () => {
   const strip = (root, re) => root.children.filter(c => re.test(c.name)).forEach(c => root.remove(c));
   strip(MODELS.service_pistol, /_b$|magazine|bullet/);
   strip(MODELS.bolt_action_rifle_7_62, /bolt_b|bullet/);
-  buildProceduralGuns(); prepareSoldier(); buildMap(); buildNav(); setupViewmodels(); loadSounds(); // the desert is always ready
+  buildProceduralGuns(); prepareSoldier(); buildMap(); buildNav(); buildWaypoints(); setupViewmodels(); loadSounds(); // the desert is always ready
   $('#loadbar').style.width = '100%';
   $('#go').disabled = false;
   $('#go').textContent = joinCode ? 'Присоединиться к игре' : 'Создать игру';
@@ -3748,7 +4033,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, BURST, hands, HOLD, POSE, HAND_SHIFT, ELBOW_DIR, startReload, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, pathVia, WP, walkable, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, BURST, hands, HOLD, POSE, HAND_SHIFT, ELBOW_DIR, startReload, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };

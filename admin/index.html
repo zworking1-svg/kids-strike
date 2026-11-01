@@ -39,6 +39,9 @@
   .wtable input[type=text] { width:100%; min-width:150px; padding:6px 8px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 17px Rajdhani,sans-serif; }
   .wtable td.slot { color:var(--muted); white-space:nowrap; }
   .wtable select.snd { width:250px; }
+  .rtable select { width:100%; min-width:180px; } .rtable td.key { color:var(--accent); font-weight:700; white-space:nowrap; }
+  .rtable input[type=text] { width:100%; min-width:140px; padding:6px 8px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 17px Rajdhani,sans-serif; }
+  .rtable .miss { color:var(--bad); font-size:13px; }
   .muted { color:var(--muted); font-size:14px; }
   #gate { max-width:520px; margin:12vh auto; background:var(--panel); padding:24px; border-left:3px solid var(--accent); }
   #gate input { width:100%; padding:9px; margin:6px 0 12px; background:#07080a; color:var(--text); border:1px solid #2b313b; font:600 18px Rajdhani,sans-serif; }
@@ -115,6 +118,14 @@
         У дробовиков это урон одной дробины. У гранаты, гранатомёта и РПГ — урон в самом центре взрыва. Пустое название — вернуть стандартное.
         Звук выстрела: выбери в списке, кнопка ▶ проиграет его во вкладке с игрой (громкость компьютера должна быть включена).</p>
       <table class="wtable"><thead><tr><th>Слот</th><th>Название</th><th>Урон</th><th>Перезарядка, сек</th><th>Звук выстрела</th><th>Цена, $</th><th>Магазин патронов, $</th></tr></thead><tbody id="weapons"></tbody></table>
+    </section>
+    <section class="wide">
+      <h2>Радио — голосовые фразы</h2>
+      <p class="muted">В игре <b>Z</b> открывает «Команды», <b>X</b> — «Ответы», цифра 1–9 говорит фразу: её слышат все игроки и видят подпись.
+        Для каждой цифры выбери свою запись и напиши подпись. Записи делаются на странице <a href="../voice/" target="_blank" style="color:var(--accent)">«Студия голоса»</a>
+        кнопкой «Положить в игру» в папку <code>assets/snd/voice</code> — потом нажми «Обновить список записей». Кнопка ▶ проигрывает запись здесь.</p>
+      <div class="row" style="align-items:center"><button id="voiceReload">⟳ Обновить список записей</button><span class="muted" id="voiceInfo"></span></div>
+      <table class="rtable"><thead><tr><th>Клавиша</th><th>Подпись</th><th>Запись</th><th></th></tr></thead><tbody id="radio"></tbody></table>
     </section>
   </main>
 </div>
@@ -213,7 +224,61 @@ function render() {
     el.value = d.name ? (cfg.names[d.name] || '') : d.dmg ? cfg.dmg[d.dmg] : d.reload ? cfg.reload[d.reload] : d.price ? cfg.prices[d.price] : cfg.ammoPrices[d.ammo];
   });
   wt.querySelectorAll('select[data-sound]').forEach(el => { if (el !== document.activeElement) el.value = cfg.sound[el.dataset.sound]; });
+  renderRadio(cfg.radio);
   renderPlayers(s.players);
+}
+// ---- radio: one row per number of the Z and X menus. The list of recordings is the voice page's voice.json
+// (what it saved into assets/snd/voice) plus the standard names it suggests.
+const VOICE_DIR = '../assets/snd/voice/';
+const VOICE_PRESETS = [['voice_fire.wav', 'Огонь!'], ['voice_grenade.wav', 'Граната!'], ['voice_reload.wav', 'Перезаряжаю!'], ['voice_cover.wav', 'Прикрой!'],
+  ['voice_hurt.wav', 'Ай!'], ['voice_win.wav', 'Победа!'], ['voice_follow.wav', 'За мной!'], ['voice_enemy.wav', 'Враг!']];
+const MENUS = [['z', 'Z'], ['x', 'X']];
+let voices = [], voiceOk = {};
+async function loadVoices() {
+  let list = [];
+  try { const r = await fetch(VOICE_DIR + 'voice.json', { cache: 'no-store' }); if (r.ok) list = (await r.json()).map(v => [v.file, v.text]); } catch {}
+  const seen = new Set(); voices = [];
+  for (const [file, text] of [...list, ...VOICE_PRESETS]) if (file && !seen.has(file)) { seen.add(file); voices.push([file, text || '']); }
+  // which files really exist (a standard name with no recording yet is marked)
+  voiceOk = {};
+  await Promise.all(voices.map(([f]) => fetch(VOICE_DIR + f, { method: 'HEAD', cache: 'no-store' }).then(r => { voiceOk[f] = r.ok; }).catch(() => { voiceOk[f] = false; })));
+  $('#voiceInfo').textContent = `Записей в папке: ${Object.values(voiceOk).filter(Boolean).length}`;
+  $('#radio').innerHTML = ''; // rebuild the selects with the new list
+  if (state) renderRadio(state.cfg.radio);
+}
+$('#voiceReload').onclick = loadVoices;
+loadVoices();
+let hearing = null;
+function hear(file) {
+  if (!file) return;
+  hearing?.pause();
+  hearing = new Audio(VOICE_DIR + file);
+  hearing.play().catch(() => alert('Не получилось проиграть ' + file + ' — такого файла ещё нет в assets/snd/voice'));
+}
+function renderRadio(radio) {
+  if (!radio) return;
+  const body = $('#radio');
+  if (!body.childElementCount) {
+    const opts = `<option value="">— без звука —</option>` + voices.map(([f, t]) => `<option value="${esc(f)}">${esc(t ? t + ' · ' : '')}${esc(f)}${voiceOk[f] ? '' : ' (нет файла)'}</option>`).join('');
+    body.innerHTML = MENUS.map(([menu, key]) => radio[menu].map((_, i) => `<tr data-menu="${menu}" data-i="${i}"><td class="key">${key} · ${i + 1}</td>` +
+      `<td><input type="text" maxlength="40" placeholder="подпись"></td><td><select>${opts}</select></td><td><button title="Послушать">▶</button></td></tr>`).join('')).join('');
+    body.querySelectorAll('tr').forEach(tr => {
+      const inp = tr.querySelector('input'), sel = tr.querySelector('select');
+      const save = () => send('radio', { menu: tr.dataset.menu, i: +tr.dataset.i, file: sel.value, text: inp.value });
+      inp.addEventListener('change', save);
+      // picking a recording saves it and plays it once; an empty caption takes the recording's own phrase
+      sel.addEventListener('change', () => { if (!inp.value.trim()) inp.value = voices.find(v => v[0] === sel.value)?.[1] || ''; save(); hear(sel.value); });
+      tr.querySelector('button').onclick = () => hear(sel.value);
+    });
+  }
+  body.querySelectorAll('tr').forEach(tr => {
+    const [file, text] = radio[tr.dataset.menu][+tr.dataset.i], inp = tr.querySelector('input'), sel = tr.querySelector('select');
+    if (inp !== document.activeElement) inp.value = text;
+    if (sel !== document.activeElement) {
+      if (file && ![...sel.options].some(o => o.value === file)) sel.add(new Option(file + ' (нет в списке)', file));
+      sel.value = file;
+    }
+  });
 }
 // one row per player, kept between updates so a half-typed amount isn't lost
 function renderPlayers(list) {
