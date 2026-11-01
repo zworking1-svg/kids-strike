@@ -788,16 +788,7 @@ const CASTLE = (() => {
   }
   slab(LV[1], holes1); slab(LV[2], holes2);
   box(-IX, IX, ROOF - SLAB, ROOF, IZ0, IZ1, 'castle', 'roof');
-  // waypoints for the bots: the doorways and the corners round the stairs, so they can find their way between rooms
-  const waypoints = [];
-  for (const y of LV) {
-    for (const sx of [-1, 1]) waypoints.push([sx * 9.5, y, -16], [sx * 9.5, y, -0.5], [sx * 7.5, y, -16], [sx * 7.5, y, -0.5],
-      [sx * 11.5, y, -16], [sx * 11.5, y, -10.6], [sx * 11.5, y, -0.5], [sx * 14.3, y, -10.6], [sx * 14.3, y, -1.2]);
-    waypoints.push([0, y, -12], [-5.6, y, -12], [5.6, y, -12], [0, y, -10], [0, y, -14]);
-  }
-  waypoints.push([0, 0, 2], [0, 0, 4.5], [0, 0, 0], [0, 0, -22], [0, 0, -24.5], [0, 0, -20]); // gate, back door
-  for (const sx of [-1, 1]) waypoints.push([sx * 16, 0, -18], [sx * 18, 0, -18], [sx * 14, 0, -18]); // side doors
-  return { walls, solids, flights, waypoints, levels: LV };
+  return { walls, solids, flights, levels: LV };
 })();
 // ---- the Japanese temple next to the castle (the creator's model): a pagoda 37 m tall on a stone platform 20×20 m,
 // 2.2 m high, with steps at the front. Every storey can be walked:
@@ -906,7 +897,11 @@ const TEMPLE = (() => {
     ['jp_torii_post', -2.6, 0, 18, 0, true], ['jp_torii_post', 2.6, 0, 18, 0, true], ['jp_torii_top', 0, 0, 18, 0, false]);
   // to the map: position and turn of a model placed in the temple's plan
   const toMap = ([name, x, y, z, rot, solid]) => [name, X - z, y, Z + x, rot - Math.PI / 2, solid];
-  return { solids, cuts, decor: decor.map(toMap), model: ['temple', X, Z, -Math.PI / 2] };
+  // the stairs, end to end, for the bots: front steps, ground -> 1st, 1st -> landing -> 2nd, 2nd -> top
+  const links = [[[0, 0, 14.2], [0, G, 9.4]], [[-3.4, G, 3.55], [-3.4, F[1], -4.3]],
+    [[3.45, F[1], -4.5], [3.45, 13.1, 1.6], [2.05, 13.1, 1.6], [2.05, F[2], -3.2]], [[-2.05, F[2], -3.45], [-2.05, F[3], 1.45]]]
+    .map(chain => chain.map(([x, y, z]) => [X - z, y, Z + x]));
+  return { solids, cuts, links, decor: decor.map(toMap), model: ['temple', X, Z, -Math.PI / 2] };
 })();
 const MAPS = {
   dust: {
@@ -922,7 +917,6 @@ const MAPS = {
       [-31,23,10,1.5,4,'wall'], [31,-23,10,1.5,4,'wall'],
       [-4,-28,10,1.5,2.2,'low'], [4,28,10,1.5,2.2,'low'],
     ],
-    navSkip: (x, z) => Math.abs(x) < 3.5 && Math.abs(z) < 3.5, // closed yard: reachable only through a blown hole
     props: dustProps,
   },
   // cs_mansion (our own design): a grey three-storey stone castle and a Japanese temple in a big walled garden.
@@ -950,7 +944,7 @@ const MAPS = {
       [-40, -14, 0.5, 10, 1.4, 'brick'], [-48, 4, 8, 0.5, 1.4, 'brick'], [-36, 18, 6, 0.5, 1.2, 'brick'], [-50, -32, 0.5, 8, 1.4, 'brick'],
     ],
     floors: [[0, -10, 32, 24, 'parquet', 'wood'], [0, 18.5, 3, 31, 'patio', 'stone'], [0, -28, 30, 10, 'patio', 'stone'], [28.6, -8, 5.2, 4.6, 'patio', 'stone']],
-    solids: [...CASTLE.solids, ...TEMPLE.solids], statics: [TEMPLE.model], flights: CASTLE.flights, waypoints: CASTLE.waypoints, levels: CASTLE.levels,
+    solids: [...CASTLE.solids, ...TEMPLE.solids], statics: [TEMPLE.model], links: [...CASTLE.flights.map(f => [f.a, f.b]), ...TEMPLE.links],
     models: ['Sofa_01','ArmChair_01','CoffeeTable_01','WoodenTable_01','GothicBed_01','GothicCabinet_01','Shelf_01',
       'potted_plant_01','potted_plant_04','dining_table','ClassicConsole_01','outdoor_table_chair_set_01','planter_box_01'],
     props: mansionProps,
@@ -1291,7 +1285,7 @@ function clearMap() {
   walls.length = 0;
   for (const p of props) { scene.remove(p.obj); for (const d of p.decals || []) scene.remove(d); }
   props.length = 0;
-  colliders.length = 0; worldMeshes.length = 0; NAV.length = 0;
+  colliders.length = 0; worldMeshes.length = 0; NAV.length = 0; NAVN.length = 0;
   for (const o of [...debris, ...movers]) scene.remove(o.mesh);
   debris.length = 0; movers.length = 0;
   for (const h of holes) scene.remove(h); holes.length = 0;
@@ -1333,7 +1327,7 @@ async function switchMap(id) {
     ...(MAPS[id].statics || []).filter(([n]) => !MODELS[n]).map(([n]) => loadStatic(n))]);
   clearMap();
   mapId = id; MAPDEF = MAPS[id];
-  buildMap(); buildNav(); buildWaypoints();
+  buildMap(); if (isHost) buildNav(); // only the host runs the bots
   mapLoading = false;
   showCenter('', 0);
   while (pendingWorld.length) clientHandle(pendingWorld.shift());
@@ -3331,7 +3325,7 @@ function hostRemove(id) {
 }
 function hostSpawn(p) {
   p.alive = true; p.hp = 100; p.p = pickSpawn(p.team);
-  if (p.bot) { p.pos.set(...p.p); p.vel.set(0,0,0); p.yaw = p.team === 'ct' ? Math.PI : 0; }
+  if (p.bot) { p.pos.set(...p.p); p.vel.set(0,0,0); p.yaw = p.team === 'ct' ? Math.PI : 0; p.path = null; p.alert = null; p.lastSeen = null; p.seen = null; }
   else hostSend(p.id, { t:'spawn', p: p.p });
 }
 // buying works only near your own team's spawn, like the buy zone in CS (unless the admin allows it everywhere)
@@ -3361,6 +3355,7 @@ function hostHandle(from, m) {
     if (!p.alive) return;
     hostBroadcast({ t:'shot', id: from, o: m.o, e: m.e, es: m.es, w: m.w }, from);
     for (const e of m.es || [m.e]) hostShotWorld(m.o, e, m.w, from); // bullets wear down walls and props
+    if (m.w !== 'knife') botsHear(p, p.p);
   }
   else if (m.t === 'hit') {
     const w = WEAPONS[m.w]; if (!w || !p.alive) return;
@@ -3433,6 +3428,7 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
     if (v.armor === 0) v.helmet = false;
   }
   dmg = lethal ? v.hp : Math.max(1, Math.round(dmg));
+  if (v.bot && a !== v) { v.alert = { p: new THREE.Vector3(...(src || a.p)), t: now() + 6 }; v.repathT = 0; } // shot at: go and look where it came from
   v.hp = Math.max(0, v.hp - dmg);
   if (!v.bot) hostSend(v.id, { t:'dmg', hp: v.hp, armor: v.armor, helmet: v.helmet });
   hostBroadcast({ t:'bl', id: v.id, part, pt, dir, big: v.hp <= 0 });
@@ -3480,6 +3476,7 @@ function hostTick(dt) {
     if (H.snapTimer <= 0) { H.snapTimer = 0.05; sendSnap(); }
     return;
   }
+  pathBudget = 2;
   for (const b of H.bots) botThink(b, dt);
   for (let i = hostNades.length - 1; i >= 0; i--) {
     const n = hostNades[i];
@@ -3626,83 +3623,162 @@ $('#adminBtn').onclick = () => window.open(adminUrl(), '_blank');
 setInterval(adminRefresh, 1000); // keep money and scores on the admin page fresh
 
 // ---------- bots (run only on the host)
-// places bots wander to: a 3 m grid on the ground and on every upper floor of the map, minus anything in the way
-const NAV = [];
+// ================= bot navigation =================
+// A 0.5 m grid over the whole map with every place a soldier can stand: the ground and the tops of floors, stairs,
+// platforms (several heights per cell inside the castle and the temple). Neighbouring places are joined when you can
+// walk from one to the other: a step up of at most 0.45 m and nothing in between (thin walls included). Stairs are
+// too steep for the grid, so each flight is joined end to end by a "link" the map lists. Bots find their way with A*
+// over this graph, then straighten the route where they can walk directly. Built once per map, on the host only.
+const NAVN = [];          // nodes: { x, y, z, i (cell), next: [[node, cost, link]], comp }
+const NAV = [];           // places bots wander to: the nodes of the big connected area, as points
+let navCells = new Map(), navOX = 0, navN = 0;
+const NAV_R = 0.35, NAV_C = 0.5; // clearance round a node (bots are 0.4 thick; they slide along walls), cell size
+// colliders bucketed in 4 m squares, for fast "is anything here" questions while building
+function colliderGrid() {
+  const G = new Map(), key = (a, b) => a * 4096 + b;
+  for (const b of colliders) {
+    if (b.max.y - b.min.y > 400) continue; // the invisible map border walls are handled by the grid's edge
+    for (let a = Math.floor(b.min.x / 4); a <= Math.floor(b.max.x / 4); a++) for (let c = Math.floor(b.min.z / 4); c <= Math.floor(b.max.z / 4); c++) {
+      const k = key(a, c); if (!G.has(k)) G.set(k, []); G.get(k).push(b);
+    }
+  }
+  return (x0, x1, y0, y1, z0, z1) => {
+    for (let a = Math.floor(x0 / 4); a <= Math.floor(x1 / 4); a++) for (let c = Math.floor(z0 / 4); c <= Math.floor(z1 / 4); c++)
+      for (const b of G.get(key(a, c)) || []) if (b.max.x > x0 && b.min.x < x1 && b.max.y > y0 && b.min.y < y1 && b.max.z > z0 && b.min.z < z1) return b;
+    return null;
+  };
+}
 function buildNav() {
-  const lim = MAPDEF.size / 2 - 4;
-  for (const y of MAPDEF.levels || [0]) for (let x = -lim; x <= lim; x += 3) for (let z = -lim; z <= lim; z += 3) {
-    if (y > 0 && !mapSolids.some(s => s.kind === 'floor' && Math.abs(s.box.max.y - y) < 0.05 && x > s.box.min.x + 0.5 && x < s.box.max.x - 0.5 && z > s.box.min.z + 0.5 && z < s.box.max.z - 0.5)) continue;
-    const p = new THREE.Vector3(x, y, z);
-    if (!MAPDEF.navSkip?.(x, z) && !colliders.some(b => b.min.y < y + 1 && b.max.y > y + 0.35 && p.x + 1.2 > b.min.x && p.x - 1.2 < b.max.x && p.z + 1.2 > b.min.z && p.z - 1.2 < b.max.z)) NAV.push(p);
+  NAVN.length = 0; NAV.length = 0; navCells = new Map();
+  const S = MAPDEF.size / NAV_C, hit = colliderGrid(), tops = colliderTops();
+  navOX = -MAPDEF.size / 2; navN = S;
+  // standing places in every cell
+  for (let ix = 0; ix < S; ix++) for (let iz = 0; iz < S; iz++) {
+    const x = navOX + (ix + 0.5) * NAV_C, z = navOX + (iz + 0.5) * NAV_C, list = [];
+    for (const y of [0, ...tops(x, z)]) {
+      if (list.some(n => Math.abs(n.y - y) < 0.1)) continue;
+      if (hit(x - NAV_R, x + NAV_R, y + 0.46, y + 1.7, z - NAV_R, z + NAV_R)) continue;
+      const n = { x, y, z, i: ix * S + iz, next: [], comp: -1 }; NAVN.push(n); list.push(n);
+    }
+    if (list.length) navCells.set(ix * S + iz, list);
   }
-}
-// Waypoints the bots route through when a wall is in the way (the castle's doorways): which ones see each other.
-const WP = [];
-function buildWaypoints() {
-  scene.updateMatrixWorld(true); // the map was just built and not drawn yet: rays need its blocks where they really are
-  WP.length = 0;
-  for (const p of MAPDEF.waypoints || []) WP.push({ p: new THREE.Vector3(...p), next: [] });
-  for (let i = 0; i < WP.length; i++) for (let j = i + 1; j < WP.length; j++) {
-    const a = WP[i], b = WP[j];
-    if (Math.abs(a.p.y - b.p.y) < 1 && walkable(a.p, b.p)) { const d = a.p.distanceTo(b.p); a.next.push([j, d]); b.next.push([i, d]); }
+  // walkable neighbours
+  const at = (ix, iz, y) => (navCells.get(ix * S + iz) || []).find(n => Math.abs(n.y - y) <= 0.45);
+  for (const n of NAVN) {
+    const ix = Math.floor(n.i / S), iz = n.i % S;
+    for (const [dx, dz] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+      const m = at(ix + dx, iz + dz, n.y); if (!m) continue;
+      if (dx && dz && (!at(ix + dx, iz, n.y) || !at(ix, iz + dz, n.y))) continue; // no cutting corners
+      const top = Math.max(n.y, m.y), mx = (n.x + m.x) / 2, mz = (n.z + m.z) / 2;
+      if (hit(mx - 0.15, mx + 0.15, top + 0.46, top + 1.6, mz - 0.15, mz + 0.15)) continue; // a thin wall between them
+      const c = Math.hypot(dx, dz) * NAV_C + Math.abs(n.y - m.y);
+      n.next.push([m, c, false]); m.next.push([n, c, false]);
+    }
   }
+  // stairs: each link is a chain of points walked straight from one to the next; its ends join the nearby grid
+  for (const chain of MAPDEF.links || []) {
+    const pts = chain.map(([x, y, z]) => { const n = { x, y, z, i: -1, next: [], comp: -1 }; NAVN.push(n); return n; });
+    for (let k = 0; k + 1 < pts.length; k++) { const a = pts[k], b = pts[k + 1], c = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z); a.next.push([b, c, true]); b.next.push([a, c, true]); }
+    for (const e of [pts[0], pts[pts.length - 1]]) for (const m of navNear(e.x, e.y, e.z, 2.2, 0.5)) if (clearWalk(hit, e, m)) {
+      const c = Math.hypot(e.x - m.x, e.z - m.z); e.next.push([m, c, false]); m.next.push([e, c, false]);
+    }
+  }
+  // connected areas; bots roam the biggest one (not the castle roof, the tops of walls, a closed yard…)
+  let comp = 0, best = -1, bestSize = 0;
+  for (const n of NAVN) {
+    if (n.comp >= 0) continue;
+    const stack = [n]; n.comp = comp; let size = 0;
+    while (stack.length) { const a = stack.pop(); size++; for (const [m] of a.next) if (m.comp < 0) { m.comp = comp; stack.push(m); } }
+    if (size > bestSize) { bestSize = size; best = comp; }
+    comp++;
+  }
+  for (const n of NAVN) if (n.comp === best && n.i >= 0) NAV.push(n);
+  NAV.main = best;
+  // the stairs' end points can be looked up by place too (a bot that is on the stairs starts its route from them)
+  for (const n of NAVN) if (n.i < 0) { const c = Math.floor((n.x - navOX) / NAV_C) * navN + Math.floor((n.z - navOX) / NAV_C); if (!navCells.has(c)) navCells.set(c, []); navCells.get(c).push(n); }
 }
-// nothing in the way at knee and chest height
-const _wa = new THREE.Vector3(), _wb = new THREE.Vector3();
-function walkable(a, b) {
-  for (const h of [0.5, 1.3]) if (!lineOfSight(_wa.copy(a).setY(a.y + h), _wb.copy(b).setY(b.y + h))) return false;
+// heights of everything one could stand on at (x, z), from the colliders
+function colliderTops() {
+  const G = new Map();
+  for (const b of colliders) {
+    if (b.max.y > 60 || b.max.y < 0.05) continue;
+    for (let a = Math.floor(b.min.x); a <= Math.floor(b.max.x); a++) for (let c = Math.floor(b.min.z); c <= Math.floor(b.max.z); c++) {
+      const k = a * 4096 + c; if (!G.has(k)) G.set(k, []); G.get(k).push(b);
+    }
+  }
+  return (x, z) => (G.get(Math.floor(x) * 4096 + Math.floor(z)) || []).filter(b => x >= b.min.x && x <= b.max.x && z >= b.min.z && z <= b.max.z).map(b => b.max.y); // edges included: floors are laid in pieces
+}
+// nothing in the way along a straight walk from a to b (sampled every 0.3 m, knee to head height)
+function clearWalk(hit, a, b) {
+  const L = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(L / 0.3)), top = Math.max(a.y, b.y);
+  for (let k = 0; k <= n; k++) { const x = a.x + (b.x - a.x) * k / n, z = a.z + (b.z - a.z) * k / n; if (hit(x - 0.15, x + 0.15, top + 0.46, top + 1.6, z - 0.15, z + 0.15)) return false; }
   return true;
 }
-// where to walk to get from `from` to `to` on the same storey: straight there if nothing is in the way,
-// else to the first waypoint of the shortest route through the waypoints
-function pathVia(from, to) {
-  if (!WP.length || walkable(from, to)) return to;
-  const lv = levelOf(from.y), dist = WP.map(() => Infinity), prev = WP.map(() => -1), done = WP.map(() => false);
-  WP.forEach((w, i) => { if (levelOf(w.p.y) === lv && walkable(from, w.p)) dist[i] = from.distanceTo(w.p); });
-  let best = -1, bestD = Infinity;
-  for (;;) {
-    let i = -1; for (let k = 0; k < WP.length; k++) if (!done[k] && dist[k] < Infinity && (i < 0 || dist[k] < dist[i])) i = k;
-    if (i < 0 || dist[i] >= bestD) break;
-    done[i] = true;
-    if (walkable(WP[i].p, to)) { const d = dist[i] + WP[i].p.distanceTo(to); if (d < bestD) { bestD = d; best = i; } }
-    for (const [j, d] of WP[i].next) if (dist[i] + d < dist[j]) { dist[j] = dist[i] + d; prev[j] = i; }
+// grid nodes near a point: within r metres across and dy up or down
+function navNear(x, y, z, r = 1.5, dy = 1.2) {
+  const out = [], ix = Math.floor((x - navOX) / NAV_C), iz = Math.floor((z - navOX) / NAV_C), R = Math.ceil(r / NAV_C);
+  for (let a = ix - R; a <= ix + R; a++) for (let c = iz - R; c <= iz + R; c++) {
+    if (a < 0 || c < 0 || a >= navN || c >= navN) continue;
+    for (const n of navCells.get(a * navN + c) || []) if (Math.abs(n.y - y) <= dy && Math.hypot(n.x - x, n.z - z) <= r) out.push(n);
   }
-  if (best < 0) return to;
-  while (prev[best] >= 0) best = prev[best];
-  return WP[best].p;
+  return out;
 }
-// which storey a height is on (0 = ground)
-const levelOf = y => (MAPDEF.levels || [0]).filter(l => l <= y + 1).length - 1;
-// A bot whose goal is on another storey walks to the nearest flight of stairs that leads that way, climbs (or goes down)
-// it end to end, and carries on from there; returns the point to walk towards right now.
-function botWaypoint(b) {
-  const target = botTarget(b);
-  if (b.route?.on) return target; // on the stairs: straight up (or down) them
-  // round the walls: re-plan every 1.5 s, or as soon as the waypoint is reached
-  if (b.viaFor !== target || now() > b.viaT || Math.hypot(b.via.x - b.pos.x, b.via.z - b.pos.z) < 0.8) {
-    b.via = pathVia(b.pos, target); b.viaFor = target; b.viaT = now() + 1.5;
+// the node of the big connected area a soldier standing at p is on (or next to; from the middle of a flight of
+// stairs that is one of its ends)
+function navAt(p) {
+  let best = null, bd = Infinity;
+  for (const n of navNear(p.x, p.y, p.z, 3, 3)) {
+    if (n.comp !== NAV.main) continue;
+    const d = Math.hypot(n.x - p.x, n.z - p.z) + Math.abs(n.y - p.y) * 2;
+    if (d < bd) { bd = d; best = n; }
   }
-  return b.via;
+  return best;
 }
-function botTarget(b) {
-  const lv = levelOf(b.pos.y), gl = levelOf(b.goal.y);
-  if (lv === gl || !MAPDEF.flights) { b.route = null; return b.goal; }
-  if (!b.route || b.route.lv !== lv) {
-    const up = gl > lv;
-    let best = null, bd = Infinity;
-    for (const f of MAPDEF.flights) {
-      const [from, to] = up ? [f.a, f.b] : [f.b, f.a];
-      if (levelOf(from[1]) !== lv) continue;
-      const d = Math.hypot(from[0] - b.pos.x, from[2] - b.pos.z);
-      if (d < bd) { bd = d; best = { lv, from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), on: false }; }
+// A* from a position to a node; returns the points to walk through (straightened), or null if there is no way
+function findPath(from, goal) {
+  const start = navAt(from); if (!start || !goal) return null;
+  const g = new Map([[start, 0]]), prev = new Map(), open = [[Math.hypot(start.x - goal.x, start.y - goal.y, start.z - goal.z), start]];
+  const push = item => { open.push(item); let i = open.length - 1; while (i > 0) { const pi = (i - 1) >> 1; if (open[pi][0] <= open[i][0]) break; [open[pi], open[i]] = [open[i], open[pi]]; i = pi; } };
+  const pop = () => { const top = open[0], last = open.pop(); if (open.length) { open[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < open.length && open[l][0] < open[m][0]) m = l; if (r < open.length && open[r][0] < open[m][0]) m = r; if (m === i) break; [open[m], open[i]] = [open[i], open[m]]; i = m; } } return top; };
+  let found = false, guard = 0;
+  while (open.length && guard++ < 150000) {
+    const [, n] = pop();
+    if (n === goal) { found = true; break; }
+    const gn = g.get(n);
+    for (const [m, c] of n.next) {
+      const gm = gn + c;
+      if (gm < (g.get(m) ?? Infinity)) { g.set(m, gm); prev.set(m, [n, c]); push([gm + Math.hypot(m.x - goal.x, m.y - goal.y, m.z - goal.z), m]); }
     }
-    if (!best) { b.goal = null; return b.pos; }
-    b.route = best;
   }
-  const r = b.route;
-  if (!r.on && Math.hypot(r.from.x - b.pos.x, r.from.z - b.pos.z) < 0.8) r.on = true;
-  return r.on ? r.to : r.from;
+  if (!found) return null;
+  const path = [goal]; let n = goal;
+  while (prev.has(n)) { n = prev.get(n)[0]; path.unshift(n); }
+  // straighten: from each point jump to the farthest later point reachable in a straight walk over the grid
+  const isLink = (a, b) => a.next.some(([m, , l]) => m === b && l);
+  const out = [path[0]];
+  for (let i = 0; i < path.length - 1;) {
+    let j = i + 1;
+    if (!isLink(path[i], path[j])) while (j + 1 < path.length && !isLink(path[j], path[j + 1]) && straightOk(path[i], path[j + 1])) j++;
+    out.push(path[j]); i = j;
+  }
+  return out.slice(1);
 }
+// walking straight from node a to node b crosses only grid cells joined to each other at about the same height
+function straightOk(a, b) {
+  if (a.i < 0 || b.i < 0) return false;
+  const L = Math.hypot(b.x - a.x, b.z - a.z), n = Math.ceil(L / (NAV_C * 0.5)); let cur = a;
+  for (let k = 1; k <= n; k++) {
+    const x = a.x + (b.x - a.x) * k / n, z = a.z + (b.z - a.z) * k / n;
+    const ix = Math.floor((x - navOX) / NAV_C), iz = Math.floor((z - navOX) / NAV_C), cell = ix * navN + iz;
+    if (cell === cur.i) continue;
+    const m = cur.next.find(([q, , l]) => !l && q.i === cell);
+    if (!m) return false;
+    cur = m[0];
+  }
+  return true;
+}
+const randomNav = () => NAV[Math.floor(Math.random() * NAV.length)];
+let pathBudget = 0; // new routes allowed this tick: a long route takes a few ms, so the bots take turns
 let botSeq = 0;
 function addBot(team) {
   const id = 'bot' + (botSeq++);
@@ -3710,14 +3786,23 @@ function addBot(team) {
   const name = BOT_NAMES.find(n => !used.has(n)) || 'Робот ' + botSeq;
   hostBroadcast({ t:'info', text: `${name} зашёл за команду «${TEAM_NAME[team]}»` });
   const b = { id, bot:true, name, team, hp:100, alive:false, k:0, d:0, p:[0,0,0], ry:0, rx:0, w: DEFAULT_GUN[team], money:0, armor:0, helmet:false,
-    pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw:0, goal:null, nextShot:0, seen:null, stuckT:0, lastPos: new THREE.Vector3(), strafe:1, strafeT:0 };
+    pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw:0, goal:null, path:null, repathT:0, alert:null, lastSeen:null, nextShot:0, seen:null,
+    stuckT:0, stuckN:0, lastPos: new THREE.Vector3(), strafe:1, strafeT:0 };
   H.players.set(id, b); H.bots.push(b);
   hostSpawn(b);
 }
+// What a bot does, every tick on the host:
+//  - sees an enemy (in front of it, or anywhere round it when alerted, and nothing in between): turns, shoots;
+//    far away it closes in along its route, nearer it sidesteps (never into a wall);
+//  - doesn't: goes where something happened — where it was shot from, a shot it heard, where it last saw an enemy —
+//    or hunts an enemy, or looks round the map; always along a route found on the navigation grid;
+//  - stuck (not getting closer to the next point of its route): finds a new route, then jumps, then picks another goal.
 function botThink(b, dt) {
   if (!b.alive) return;
+  const t = now(), lvl = cfg.botLevel; // 0 easy, 1 normal, 2 hard
   const eye = b.pos.clone(); eye.y += EYE;
-  let enemy = null, best = 45;
+  const alerted = b.alert && t < b.alert.t;
+  let enemy = null, best = 60;
   for (const q of H.players.values()) {
     if (!q.alive || q.team === b.team) continue;
     const qe = new THREE.Vector3(q.p[0], q.p[1] + EYE, q.p[2]);
@@ -3725,27 +3810,37 @@ function botThink(b, dt) {
     if (dist >= best) continue;
     const dx = qe.x - eye.x, dz = qe.z - eye.z;
     const ang = Math.abs(((Math.atan2(-dx, -dz) - b.yaw + Math.PI*3) % (Math.PI*2)) - Math.PI);
-    if (ang > 1.4 && b.seen !== q.id) continue;
+    if (ang > (alerted ? 3.2 : 1.4) && b.seen !== q.id) continue;
     if (lineOfSight(eye, qe)) { enemy = q; best = dist; }
   }
-  const t = now();
   let mx = 0, mz = 0, speed = RUN * 0.8;
   if (enemy) {
-    const lvl = cfg.botLevel; // 0 easy, 1 normal, 2 hard
     if (b.seen !== enemy.id) { b.seen = enemy.id; b.nextShot = t + [0.9, 0.55, 0.3][lvl] + Math.random()*0.4; }
+    b.lastSeen = { p: new THREE.Vector3(...enemy.p), t: t + 6 }; b.alert = null;
     const dx = enemy.p[0] - b.pos.x, dz = enemy.p[2] - b.pos.z;
     b.yaw += (((Math.atan2(-dx, -dz) - b.yaw + Math.PI*3) % (Math.PI*2)) - Math.PI) * Math.min(1, dt * 10);
-    // pick a calm strafe (or stand still) for a while instead of twitching side to side
-    b.strafeT -= dt; if (b.strafeT <= 0) { b.strafe = [-1, 0, 1][Math.floor(Math.random() * 3)]; b.strafeT = 1.2 + Math.random() * 1.5; }
-    mx = Math.cos(b.yaw) * b.strafe; mz = -Math.sin(b.yaw) * b.strafe; speed = WALK;
+    if (best > 22 || Math.abs(enemy.p[1] - b.pos.y) > 4) {
+      // far, or on another floor: close in along the route (re-planned every 2 s as the enemy moves), still shooting
+      if ((!b.path || t > b.repathT) && pathBudget-- > 0) { b.path = findPath(b.pos, navAt(b.lastSeen.p)); b.repathT = t + 2; }
+      const w = nextWaypoint(b);
+      if (w) { const l = Math.hypot(w.x - b.pos.x, w.z - b.pos.z) || 1; mx = (w.x - b.pos.x) / l; mz = (w.z - b.pos.z) / l; }
+      speed = WALK * 1.3;
+    } else {
+      // near: a calm sidestep (or standing still) for a while; turn back if there is a wall that way
+      b.strafeT -= dt; if (b.strafeT <= 0) { b.strafe = [-1, 0, 1][Math.floor(Math.random() * 3)]; b.strafeT = 1.2 + Math.random() * 1.5; }
+      mx = Math.cos(b.yaw) * b.strafe; mz = -Math.sin(b.yaw) * b.strafe; speed = WALK;
+      if (b.strafe && blockedAhead(b.pos, mx, mz)) { b.strafe = -b.strafe; mx = -mx; mz = -mz; if (blockedAhead(b.pos, mx, mz)) { b.strafe = 0; mx = mz = 0; } }
+      b.path = null;
+    }
     if (t >= b.nextShot) {
       b.nextShot = t + 0.35 + Math.random()*0.45;
-      const target = new THREE.Vector3(enemy.p[0], enemy.p[1] + 1.2, enemy.p[2]);
+      const target = new THREE.Vector3(enemy.p[0], enemy.p[1] + (enemy.c ? 0.8 : 1.2), enemy.p[2]);
       const acc = THREE.MathUtils.clamp(0.55 - best * 0.012, 0.15, 0.5) * [0.6, 1, 1.4][lvl];
       const hit = Math.random() < acc;
       const end = hit ? target : target.clone().add(new THREE.Vector3((Math.random()-.5)*2, (Math.random()-.5)*1.5, (Math.random()-.5)*2));
       hostBroadcast({ t:'shot', id: b.id, o: [eye.x, eye.y, eye.z], e: [end.x, end.y, end.z], w: b.w });
       hostShotWorld([eye.x, eye.y, eye.z], [end.x, end.y, end.z], b.w, b.id);
+      botsHear(b, b.p);
       if (hit) {
         const roll = Math.random();
         const part = roll < [0.05, 0.08, 0.14][lvl] ? 'head' : roll < 0.6 ? 'body' : ['larm','rarm','lleg','rleg'][Math.floor(Math.random() * 4)];
@@ -3755,27 +3850,82 @@ function botThink(b, dt) {
     }
   } else {
     b.seen = null;
-    if (!b.goal || b.goal.distanceTo(b.pos) < 1.5) { b.goal = NAV[Math.floor(Math.random()*NAV.length)]; b.route = null; }
-    const aim = botWaypoint(b);
-    const dx = aim.x - b.pos.x, dz = aim.z - b.pos.z, l = Math.hypot(dx, dz) || 1;
-    const want = Math.atan2(-dx, -dz);
-    const diff = ((want - b.yaw + Math.PI*3) % (Math.PI*2)) - Math.PI;
-    b.yaw += diff * Math.min(1, dt * 6);
-    // walk where the body faces (slowing down while turning), so feet match the movement
-    const align = Math.max(0, Math.cos(diff));
-    mx = -Math.sin(b.yaw) * align; mz = -Math.cos(b.yaw) * align;
+    if ((!b.path || !b.path.length || t > b.repathT) && pathBudget-- > 0) planBot(b, t);
+    const w = nextWaypoint(b);
+    if (w) {
+      const dx = w.x - b.pos.x, dz = w.z - b.pos.z;
+      const diff = ((Math.atan2(-dx, -dz) - b.yaw + Math.PI*3) % (Math.PI*2)) - Math.PI;
+      b.yaw += diff * Math.min(1, dt * 7);
+      // walk where the body faces (slowing down while turning), so feet match the movement
+      const align = Math.max(0, Math.cos(diff));
+      mx = -Math.sin(b.yaw) * align; mz = -Math.cos(b.yaw) * align;
+      if (alerted || (b.lastSeen && t < b.lastSeen.t)) speed = RUN * 0.9; // hurrying to where the action is
+    }
   }
   const acc = Math.min(1, dt * 8);
   b.vel.x += (mx * speed - b.vel.x) * acc; b.vel.z += (mz * speed - b.vel.z) * acc; b.vel.y -= GRAVITY * dt;
   const g = moveBody(b.pos, b.vel, dt);
+  // stuck: not getting anywhere for 0.8 s while trying to walk
   b.stuckT += dt;
-  if (b.stuckT > 1) {
-    if (b.pos.distanceTo(b.lastPos) < 0.6 && !enemy) { b.goal = null; if (g) b.vel.y = JUMP; }
+  if (b.stuckT > 0.8) {
+    const moving = Math.hypot(mx, mz) > 0.3;
+    if (moving && b.pos.distanceTo(b.lastPos) < 0.35) {
+      b.stuckN = (b.stuckN || 0) + 1;
+      if (b.stuckN >= 2 && g) b.vel.y = jumpSpeed() * 0.8;                       // hop over whatever is in the way
+      if (b.stuckN >= 3) { b.alert = null; b.lastSeen = null; b.goal = randomNav(); b.path = findPath(b.pos, b.goal); b.repathT = now() + 8; b.stuckN = 0; }
+      else b.repathT = 0;                                                         // try a fresh route
+    } else b.stuckN = 0;
     b.lastPos.copy(b.pos); b.stuckT = 0;
   }
   b.p = [b.pos.x, b.pos.y, b.pos.z]; b.ry = b.yaw;
 }
-
+// where to go next: something it heard or was hit by, the last place it saw an enemy, an enemy to hunt, or anywhere
+function planBot(b, t) {
+  let target = null, hurry = false;
+  if (b.alert && t < b.alert.t) { target = b.alert.p; hurry = true; }
+  else if (b.lastSeen && t < b.lastSeen.t) { target = b.lastSeen.p; hurry = true; }
+  else if (Math.random() < [0.4, 0.6, 0.8][cfg.botLevel]) {
+    const foes = [...H.players.values()].filter(q => q.alive && q.team !== b.team);
+    if (foes.length) { const q = foes[Math.floor(Math.random() * foes.length)]; target = new THREE.Vector3(q.p[0], q.p[1], q.p[2]); }
+  }
+  let goal = target ? navAt(target) : null;
+  if (goal && goal.comp !== NAV.main) goal = null;
+  b.goal = goal || randomNav();
+  b.path = findPath(b.pos, b.goal) || findPath(b.pos, b.goal = randomNav()) || []; b.prevWp = null;
+  b.repathT = t + (hurry ? 2.5 : target ? 4 + Math.random() * 2 : 12 + Math.random() * 6);
+}
+// the point to walk towards now, dropping the ones already reached. The ends of a flight of stairs must be reached
+// exactly; on the stairs the bot keeps to the middle of the flight (aims at a point on it 1 m ahead), so it doesn't
+// rub a shoulder on the wall or bump its head on the floor above.
+function nextWaypoint(b) {
+  while (b.path?.length) {
+    const w = b.path[0];
+    if (Math.hypot(w.x - b.pos.x, w.z - b.pos.z) < (w.i < 0 ? 0.3 : 0.6) && Math.abs(w.y - b.pos.y) < 1.3) { b.prevWp = w; b.path.shift(); } else break;
+  }
+  if (b.path && !b.path.length) b.repathT = 0; // arrived: think of the next thing to do
+  const w = b.path?.[0]; if (!w) return null;
+  const a = b.prevWp;
+  if (w.i < 0 && a && a.i < 0 && a.next.some(([m, , l]) => m === w && l)) {
+    const dx = w.x - a.x, dz = w.z - a.z, L = Math.hypot(dx, dz) || 1;
+    const k = THREE.MathUtils.clamp(((b.pos.x - a.x) * dx + (b.pos.z - a.z) * dz) / (L * L) + 1 / L, 0, 1);
+    return { x: a.x + dx * k, y: w.y, z: a.z + dz * k };
+  }
+  return w;
+}
+// a wall, a crate or a drop right where a sidestep would take it
+function blockedAhead(pos, dx, dz) {
+  const p = new THREE.Vector3(pos.x + dx * 0.9, pos.y + 0.05, pos.z + dz * 0.9);
+  if (colliders.some(c => overlaps(p, c))) return true;
+  return floorY(p.x, pos.y + 0.3, p.z) < pos.y - 0.6; // the edge of a floor or a balcony
+}
+// gunfire alerts the enemy bots within 35 m that have nobody in sight: they come to look
+function botsHear(shooter, at) {
+  const t = now();
+  for (const b of H.bots) {
+    if (!b.alive || b.team === shooter.team || b.seen || (b.alert && t < b.alert.t)) continue;
+    if (Math.hypot(b.pos.x - at[0], b.pos.z - at[2]) < 35) { b.alert = { p: new THREE.Vector3(...at), t: t + 6 }; b.repathT = 0; }
+  }
+}
 // ================= CLIENT: handle messages =================
 const WORLD_MSGS = ['world', 'brk', 'prop', 'nade', 'boom', 'fire', 'reset', 'drop', 'undrop'];
 function clientHandle(m) {
@@ -4288,7 +4438,7 @@ manager.onLoad = () => {
   const strip = (root, re) => root.children.filter(c => re.test(c.name)).forEach(c => root.remove(c));
   strip(MODELS.service_pistol, /_b$|magazine|bullet/);
   strip(MODELS.bolt_action_rifle_7_62, /bolt_b|bullet/);
-  buildProceduralGuns(); buildJapanese(); prepareSoldier(); buildMap(); buildNav(); buildWaypoints(); setupViewmodels(); loadSounds(); // the desert is always ready
+  buildProceduralGuns(); buildJapanese(); prepareSoldier(); buildMap(); buildNav(); setupViewmodels(); loadSounds(); // the desert is always ready
   $('#loadbar').style.width = '100%';
   $('#go').disabled = false;
   $('#go').textContent = joinCode ? 'Присоединиться к игре' : 'Создать игру';
@@ -4304,7 +4454,7 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, pathVia, WP, walkable, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, BURST, hands, HOLD, POSE, HAND_SHIFT, ELBOW_DIR, startReload, get cfg() { return cfg; } }; // handy for debugging in the console
+window.__ks = { me, remotes, tryFire, NAVN, NAV, findPath, navAt, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, BURST, hands, HOLD, POSE, HAND_SHIFT, ELBOW_DIR, startReload, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };
