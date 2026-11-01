@@ -158,7 +158,7 @@
   .mpop { font-size:20px; font-weight:700; animation:mpop 2.2s forwards; } .mpop.plus { color:#7ee787; } .mpop.minus { color:#ff9b6b; }
   @keyframes mpop { 0% { opacity:0; transform:translateY(8px); } 10% { opacity:1; transform:none; } 75% { opacity:1; } 100% { opacity:0; transform:translateY(-14px); } }
   #buyhint { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); font-size:17px; color:#cfd6df; background:rgba(0,0,0,.45); padding:3px 12px; font-weight:600; display:none; }
-  #arm { display:none; align-items:center; gap:6px; margin-left:14px; font-size:32px; } #arm .shield { font-size:26px; color:#9ec3ff; } #helm { font-size:22px; }
+  #arm { display:none; align-items:center; gap:6px; margin-left:14px; font-size:32px; } #arm .shield { font-size:26px; color:#9ec3ff; } #helm { font-size:22px; } #gog { display:none; font-size:24px; margin-left:12px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="importmap">{ "imports": {
@@ -267,7 +267,7 @@
   <div id="radio"></div>
   <div id="radiosay"></div>
   <div id="hp"><span class="plus">✚</span><span id="hpv">100</span><div class="meter"><div id="hpbar" style="width:100%"></div></div>
-    <span id="arm"><span class="shield">⛉</span><span id="armv">0</span><span id="helm">⛑</span></span></div>
+    <span id="arm"><span class="shield">⛉</span><span id="armv">0</span><span id="helm">⛑</span></span><span id="gog" title="Очки-рентген: видно врагов сквозь стены">👓</span></div>
   <div id="ammo"><div id="nades"></div><div id="wname">Винтовка</div><div class="num"><span id="ammov">30</span> <small id="ammor">/ 90</small></div></div>
   <div id="scope"></div>
   <div id="buy">
@@ -327,7 +327,7 @@ const MAIN_SLOTS = [9, 8, 6, 5, 4, 3]; // "main" weapons: the one you hold after
 const START_PISTOL = 'beretta';      // everyone spawns with it, like the free pistol in CS
 const DEFAULT_GUN = { t:'ak47', ct:'m4' }; // what bots carry
 const DEFAULT_NAMES = Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) => [k, w.name]));
-const ITEM_NAME = { ...DEFAULT_NAMES, kevlar:'Бронежилет', helmet:'Бронежилет + шлем' };
+const ITEM_NAME = { ...DEFAULT_NAMES, kevlar:'Бронежилет', helmet:'Бронежилет + шлем', goggles:'Очки-рентген' };
 // the admin can rename any weapon; everybody sees the new names
 function applyNames() {
   for (const k in WEAPONS) WEAPONS[k].name = ITEM_NAME[k] = (cfg.names?.[k] || '').trim() || DEFAULT_NAMES[k];
@@ -370,7 +370,7 @@ const DEFAULT_CFG = {
   blood:true, gore:true, botLevel:1, maxNades:1, nadePower:100, map:'dust',
   jump: 1.3,          // jump height in metres
   prices: { ak47:2700, m4:2900, uzi:1200, shotgun:1050, dbshotgun:1400, sniper:4750, zhangomet:8000, laser:4500, minigun:7000, launcher:5000, rpg:6500,
-    deagle:700, beretta:300, kevlar:650, helmet:1000, grenade:300 },
+    deagle:700, beretta:300, kevlar:650, helmet:1000, grenade:300, goggles:3000 },
   ammoPrices: { ak47:80, m4:80, uzi:50, shotgun:65, dbshotgun:50, sniper:125, zhangomet:200, laser:150, minigun:300, launcher:400, rpg:800, deagle:40, beretta:30 },
   dmg: {},            // filled below with every weapon's default damage
   names: {},          // weapon renames, empty = default name
@@ -398,6 +398,9 @@ const TEAM_TINT = { ct:0x3a3e46, t:0xf4f4f0 }; // uniform colours: black kit for
 const TEAM_NAME = { ct:'Спецназ', t:'Террористы' };
 const RADIUS = 0.4, HEIGHT = 1.75, EYE = 1.6;
 const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3, CROUCH_EYE = 1.0;
+// crouching makes you lower and slimmer: jump into a window (opening 1.5 m tall) and crouch to climb through it,
+// squeeze through gaps down to 0.6 m wide. You stand up again only where there is room.
+const CROUCH_H = 1.05, CROUCH_R = 0.3;
 const jumpSpeed = () => Math.sqrt(2 * GRAVITY * Math.max(0.2, cfg.jump || 1.3)); // speed needed to rise exactly cfg.jump metres
 const PEER_PREFIX = 'kidstrike-v8-'; // bump when the network messages change, so old tabs can't join new games
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
@@ -796,6 +799,20 @@ const CASTLE = (() => {
   for (const sx of [-1, 1]) waypoints.push([sx * 16, 0, -18], [sx * 18, 0, -18], [sx * 14, 0, -18]); // side doors
   return { walls, solids, flights, waypoints, levels: LV };
 })();
+// ---- the Japanese temple next to the castle (the creator's model): a three-tier pagoda, 37 m tall, on a stone
+// platform 20×20 m and 2.2 m high with steps at the front. Stand on the platform and walk round the pagoda; the pagoda
+// itself is solid. Its collision is a few invisible boxes measured from the model; it can't be destroyed.
+const TEMPLE = (() => {
+  const X = 44, Z = -8, solids = []; // centre; the steps face west, towards the castle
+  // the model's own plan (metres, steps towards +z) turned a quarter to face west: (x, z) -> (X - z, Z + x)
+  const box = (x0, x1, y0, y1, z0, z1, kind, ray = true) => solids.push({ box: [X - z1, y0, Z + x0, X - z0, y1, Z + x1], kind, hidden: true, ray });
+  box(-10, 10, 0, 2.2, -10, 10, 'floor');           // stone platform
+  box(-5.3, 5.3, 2.2, 30, -6.3, 4.3, 'temple');     // the pagoda
+  for (let i = 0; i < 7; i++) { const z1 = 13.4 - i * 0.486; box(-2.3, 2.3, 0, 2.2 * (i + 1) / 7, z1 - 0.486, z1, 'stair'); } // the front steps
+  // the railing round the sides and the back of the platform (bullets fly through it)
+  box(9.1, 9.4, 2.2, 3.2, -9.4, 9.4, 'rail', false); box(-9.4, -9.1, 2.2, 3.2, -9.4, 9.4, 'rail', false); box(-9.4, 9.4, 2.2, 3.2, -9.4, -9.1, 'rail', false);
+  return { solids, model: ['temple', X, Z, -Math.PI / 2] };
+})();
 const MAPS = {
   dust: {
     name: 'Пустыня', size: 82, borderH: 7, border: 'outer', ground: 'ground', groundMat: 'sand',
@@ -813,14 +830,15 @@ const MAPS = {
     navSkip: (x, z) => Math.abs(x) < 3.5 && Math.abs(z) < 3.5, // closed yard: reachable only through a blown hole
     props: dustProps,
   },
-  // cs_mansion (our own design): a grey three-storey stone castle in a walled garden.
+  // cs_mansion (our own design): a grey three-storey stone castle and a Japanese temple in a big walled garden.
   // Terrorists hold the castle from the service yard behind it, counter-terrorists storm it from the front gate.
   //   north (z−)  service yard (T spawn) — crates, barrels, fuel cans
   //   middle      the castle 32×24 m with four corner towers (see CASTLE below)
   //   south (z+)  front garden: fountain, stone path, low brick walls for cover, garden tables (CT spawn at the gate)
-  //   sides       narrow side gardens with brick walls, a second way round to the side doors
+  //   sides       side gardens with brick walls, a second way round to the side doors;
+  //               east: the temple on its platform (see TEMPLE), west: an open lawn with crates and walls for cover
   mansion: {
-    name: 'Замок', size: 70, borderH: 3.5, border: 'brick', ground: 'grass', groundMat: 'dirt',
+    name: 'Замок', size: 120, borderH: 3.5, border: 'brick', ground: 'grass', groundMat: 'dirt',
     spawns: { ct: [0, 30], t: [0, -30] },
     walls: [
       ...CASTLE.walls,
@@ -833,9 +851,11 @@ const MAPS = {
       [-25, -8, 0.5, 12, 1.6, 'brick'], [25, -12, 0.5, 12, 1.6, 'brick'],
       [-25, 8, 6, 0.5, 2.5, 'brick'], [25, 6, 6, 0.5, 2.5, 'brick'],
       [-9, -27, 7, 0.5, 1.2, 'brick'], [9, -27, 7, 0.5, 1.2, 'brick'],
+      // the west lawn: low walls to hide behind
+      [-40, -14, 0.5, 10, 1.4, 'brick'], [-48, 4, 8, 0.5, 1.4, 'brick'], [-36, 18, 6, 0.5, 1.2, 'brick'], [-50, -32, 0.5, 8, 1.4, 'brick'],
     ],
-    floors: [[0, -10, 32, 24, 'parquet', 'wood'], [0, 18.5, 3, 31, 'patio', 'stone'], [0, -28, 30, 10, 'patio', 'stone']],
-    solids: CASTLE.solids, flights: CASTLE.flights, waypoints: CASTLE.waypoints, levels: CASTLE.levels,
+    floors: [[0, -10, 32, 24, 'parquet', 'wood'], [0, 18.5, 3, 31, 'patio', 'stone'], [0, -28, 30, 10, 'patio', 'stone'], [28.6, -8, 5.2, 4.6, 'patio', 'stone']],
+    solids: [...CASTLE.solids, ...TEMPLE.solids], statics: [TEMPLE.model], flights: CASTLE.flights, waypoints: CASTLE.waypoints, levels: CASTLE.levels,
     models: ['Sofa_01','ArmChair_01','CoffeeTable_01','WoodenTable_01','GothicBed_01','GothicCabinet_01','Shelf_01',
       'potted_plant_01','potted_plant_04','dining_table','ClassicConsole_01','outdoor_table_chair_set_01','planter_box_01'],
     props: mansionProps,
@@ -1052,13 +1072,33 @@ function buildMap() {
   }
   // the castle's floors, roof, stairs and railings: solid, stop bullets, and nothing breaks them
   mapSolids.length = 0;
-  for (const { box: [x0, y0, z0, x1, y1, z1], mat, kind } of D.solids || []) {
+  for (const { box: [x0, y0, z0, x1, y1, z1], mat, kind, hidden, ray } of D.solids || []) {
+    if (hidden) { // collision for a model that draws itself (the temple): an invisible box, stopping bullets unless ray is false
+      const b = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1));
+      colliders.push(b); mapSolids.push({ box: b, kind });
+      if (ray) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), hitMat);
+        m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.userData = { mat: 'wood', ground: true, noDecal: true };
+        scene.add(m); worldMeshes.push(m); mapObjects.push(m);
+      }
+      continue;
+    }
     const m = new THREE.Mesh(boxGeo(x1 - x0, y1 - y0, z1 - z0, 2), getMat(mat));
     m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true;
     m.userData = { mat: mat === 'parquet' ? 'wood' : 'stone', ground: true };
     scene.add(m); worldMeshes.push(m); mapObjects.push(m);
     mapSolids.push({ box: addCollider(m), kind });
   }
+  // big models that are part of the map itself (not props): drawn as they are, collision comes from D.solids
+  for (const [name, x, z, rot] of D.statics || []) {
+    if (!MODELS[name]) continue;
+    const o = MODELS[name].clone(); o.position.set(x, 0, z); o.rotation.y = rot;
+    o.traverse(c => { if (c.isMesh) c.castShadow = c.receiveShadow = true; });
+    scene.add(o); mapObjects.push(o);
+  }
+  // the sun's shadows cover the whole map
+  const e = Math.max(46, D.size / 2 + 4);
+  Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, far: 200 }); sun.shadow.camera.updateProjectionMatrix();
   const place = (name, scale, x, y, z, rotY = 0, solid = true) => {
     const o = MODELS[name].clone(true);
     o.scale.setScalar(scale); o.position.set(x, y, z); o.rotation.y = rotY;
@@ -1132,6 +1172,14 @@ function mansionProps(place) {
   for (const [x, z] of [[-17,-33],[17,-33],[-28,-30],[28,-30]]) place('barrel_03', 1.15, x, 0, z);
   for (const [x, z] of [[-20,-25.5],[20,-25.5],[6,-33]]) place('metal_jerrycan', 1.6, x, 0, z, 0.5, false);
   place('cardboard_box_01', 2.2, -26, 0, -33, 0.3, false); place('cardboard_box_01', 2.2, 26, 0, -33, 2, false);
+  // west lawn: crate stacks and barrels; by the temple: a few plants and crates on the way to it
+  for (const [x, z, rot] of [[-36, 6, 0], [-46, -8, H], [-42, 26, 0], [-34, -26, H], [-52, 16, H]]) {
+    place('wooden_military_crate', 1.8, x, 0, z, rot);
+    place('wooden_military_crate', 1.8, x + 0.15, 0.78, z + 0.1, rot);
+  }
+  for (const [x, z] of [[-38, -34], [-54, -2], [-30, 30]]) place('barrel_03', 1.15, x, 0, z);
+  for (const [x, z] of [[30, 6], [30, -22], [52, 16], [52, -32]]) place('potted_plant_04', 1, x, 0, z, 0, false);
+  for (const [x, z, rot] of [[38, 14, 0], [36, -30, H]]) { place('wooden_military_crate', 1.8, x, 0, z, rot); place('wooden_crate_02', 1.9, x + 2, 0, z, rot); }
 }
 // throws the current map away: walls, props, floors, rubble, decals
 function clearMap() {
@@ -1152,14 +1200,24 @@ function clearMap() {
 }
 // switch to another map; its models and textures are downloaded the first time it is played.
 // While that happens, messages about the world (holes, explosions…) wait in a queue.
+// a map's own big FBX model (the temple): textures from its PBR set, like the guns
+function loadStatic(name) {
+  return fbxLoader.loadAsync(`assets/models/${name}/${name}.fbx`).then(o => {
+    const mat = pbrSet(name, name); mat.metalness = 0.3; // its metal map makes the roof tiles sparkle too much
+    o.traverse(c => { if (c.isMesh) c.material = mat; });
+    o.scale.setScalar(0.01); // the file is in centimetres
+    MODELS[name] = o;
+  }).catch(() => { MODELS[name] = null; });
+}
 const pendingWorld = [];
 const lazyGltf = new GLTFLoader();
 async function switchMap(id) {
   if (!MAPS[id] || (id === mapId && walls.length)) return;
   mapLoading = true;
   showCenter('<small>Загрузка карты «' + MAPS[id].name + '»…</small>', 9999);
-  await Promise.all((MAPS[id].models || []).filter(n => !MODELS[n]).map(n =>
-    lazyGltf.loadAsync(`assets/models/${n}/${n}.gltf`).then(g => { MODELS[n] = g.scene; }).catch(() => { MODELS[n] = new THREE.Group(); })));
+  await Promise.all([...(MAPS[id].models || []).filter(n => !MODELS[n]).map(n =>
+    lazyGltf.loadAsync(`assets/models/${n}/${n}.gltf`).then(g => { MODELS[n] = g.scene; }).catch(() => { MODELS[n] = new THREE.Group(); })),
+    ...(MAPS[id].statics || []).filter(([n]) => !MODELS[n]).map(([n]) => loadStatic(n))]);
   clearMap();
   mapId = id; MAPDEF = MAPS[id];
   buildMap(); buildNav(); buildWaypoints();
@@ -1169,30 +1227,31 @@ async function switchMap(id) {
 }
 
 // ================= physics =================
-function overlaps(p, b) {
-  return p.x + RADIUS > b.min.x && p.x - RADIUS < b.max.x && p.z + RADIUS > b.min.z && p.z - RADIUS < b.max.z && p.y + HEIGHT > b.min.y && p.y < b.max.y;
+// body of height h and radius r (smaller while crouching)
+function overlaps(p, b, h = HEIGHT, r = RADIUS) {
+  return p.x + r > b.min.x && p.x - r < b.max.x && p.z + r > b.min.z && p.z - r < b.max.z && p.y + h > b.min.y && p.y < b.max.y;
 }
-function moveBody(pos, vel, dt) {
+function moveBody(pos, vel, dt, h = HEIGHT, r = RADIUS) {
   let onGround = false;
   pos.x += vel.x * dt;
-  for (const b of colliders) if (overlaps(pos, b)) {
+  for (const b of colliders) if (overlaps(pos, b, h, r)) {
     if (b.max.y - pos.y < 0.45 && vel.y <= 0) { pos.y = b.max.y; continue; } // step up
-    pos.x = vel.x > 0 ? b.min.x - RADIUS - 1e-3 : b.max.x + RADIUS + 1e-3;
+    pos.x = vel.x > 0 ? b.min.x - r - 1e-3 : b.max.x + r + 1e-3;
   }
   pos.z += vel.z * dt;
-  for (const b of colliders) if (overlaps(pos, b)) {
+  for (const b of colliders) if (overlaps(pos, b, h, r)) {
     if (b.max.y - pos.y < 0.45 && vel.y <= 0) { pos.y = b.max.y; continue; }
-    pos.z = vel.z > 0 ? b.min.z - RADIUS - 1e-3 : b.max.z + RADIUS + 1e-3;
+    pos.z = vel.z > 0 ? b.min.z - r - 1e-3 : b.max.z + r + 1e-3;
   }
   pos.y += vel.y * dt;
   if (pos.y <= 0) { pos.y = 0; vel.y = 0; onGround = true; }
-  for (const b of colliders) if (overlaps(pos, b)) {
-    if (vel.y <= 0) { pos.y = b.max.y; onGround = true; } else pos.y = b.min.y - HEIGHT;
+  for (const b of colliders) if (overlaps(pos, b, h, r)) {
+    if (vel.y <= 0) { pos.y = b.max.y; onGround = true; } else pos.y = b.min.y - h;
     vel.y = 0;
   }
   if (!onGround) {
     const probe = pos.clone(); probe.y -= 0.05;
-    if (colliders.some(b => overlaps(probe, b)) && vel.y <= 0) onGround = true;
+    if (colliders.some(b => overlaps(probe, b, h, r)) && vel.y <= 0) onGround = true;
   }
   return onGround;
 }
@@ -1299,6 +1358,7 @@ function gunModel(kind) {
   return g;
 }
 const hitMat = new THREE.MeshBasicMaterial({ visible:false });
+const XRAY_MAT = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 0.25, 0.15), transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, toneMapped: false });
 function makeAvatar(id, name, team) {
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
@@ -1340,8 +1400,16 @@ function makeAvatar(id, name, team) {
     hit(0.2, 0.62, 0.3, 1.15, 'rarm'), hit(0.2, 0.62, 0.3, 1.15, 'larm'),
     hit(0.23, 0.9, 0.34, 0.45, 'rleg'), hit(0.23, 0.9, 0.34, 0.45, 'lleg')];
   hitParts[2].position.x = 0.35; hitParts[3].position.x = -0.35; hitParts[4].position.x = 0.12; hitParts[5].position.x = -0.12;
-  g.add(nameSprite(name, team));
-  g.userData = { body, mixer, acts, cur:'Idle', guns, hitParts };
+  const label = nameSprite(name, team); g.add(label);
+  // x-ray silhouette for the goggles: the same skinned body, drawn in one colour on top of everything
+  let xray = null;
+  model.traverse(o => { if (o.isSkinnedMesh && !xray) xray = o; });
+  if (xray) {
+    const ghost = new THREE.SkinnedMesh(xray.geometry, XRAY_MAT);
+    ghost.bind(xray.skeleton, xray.bindMatrix); ghost.frustumCulled = false; ghost.renderOrder = 9; ghost.visible = false;
+    xray.parent.add(ghost); xray = ghost;
+  }
+  g.userData = { body, mixer, acts, cur:'Idle', guns, hitParts, label, xray, seenT: 0, seen: false };
   scene.add(g);
   return g;
 }
@@ -2331,6 +2399,7 @@ function impactAt(hit, w, dir) {
   const d = new THREE.Mesh(holeGeo, HOLE_MAT[mat] || HOLE_MAT.stone);
   d.position.copy(hit.point).addScaledVector(n, 0.012);
   d.lookAt(_v.copy(hit.point).add(n)); d.rotation.z = Math.random() * 6.28; d.scale.setScalar(size * 4);
+  if (ud.noDecal) d.visible = false; // the temple's invisible collision box: chips and dust, but no hole floating in the air
   scene.add(d); holes.push(d);
   if (holes.length > 160) scene.remove(holes.shift());
   // remember which block / prop it sits on, so it goes away when that breaks
@@ -3113,12 +3182,14 @@ function hostHandle(from, m) {
     if (item === 'helmet' && p.helmet && p.armor >= 100) return no('Уже есть');
     if (item === 'kevlar' && p.armor >= 100) return no('Уже есть');
     if (item === 'grenade' && p.nades >= cfg.maxNades) return no('Больше гранат не унести');
+    if (item === 'goggles' && p.goggles) return no('Уже есть');
     const cost = item === 'helmet' && p.armor >= 100 ? price - cfg.prices.kevlar : price; // helmet only, if vest is already on
     if (p.money < cost) return no('Не хватает денег');
     p.money -= cost;
     if (item === 'kevlar' || item === 'helmet') { p.armor = 100; if (item === 'helmet') p.helmet = true; }
     if (item === 'grenade') p.nades++;
-    hostSend(from, { t:'bought', item, money: p.money, armor: p.armor, helmet: p.helmet, nades: p.nades });
+    if (item === 'goggles') p.goggles = true; // worn until you die
+    hostSend(from, { t:'bought', item, money: p.money, armor: p.armor, helmet: p.helmet, nades: p.nades, goggles: !!p.goggles });
   }
   else if (m.t === 'nade') {
     if (!p.alive || p.nades <= 0) return;
@@ -3177,7 +3248,7 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
     else a.k = Math.max(0, a.k - 1); // team kill or blowing yourself up costs a point
     a.money = Math.min(cfg.maxMoney, a.money + reward);
     v.money = Math.max(0, v.money - cfg.deathPenalty);
-    v.armor = 0; v.helmet = false;
+    v.armor = 0; v.helmet = false; v.goggles = false;
     if (cfg.loseWeapons) v.nades = 0;
     hostBroadcast({ t:'kill', killer: a.id, victim: v.id, kn: a.name, kt: a.team, vn: v.name, vt: v.team, head, part, w, from: src || a.p,
       reward, penalty: cfg.deathPenalty });
@@ -3192,7 +3263,7 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
 // new match: scores and money back to the start
 function hostRestart(text) {
   H.drops.clear();
-  for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; q.nades = 0; hostSpawn(q); }
+  for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; q.nades = 0; q.goggles = false; hostSpawn(q); }
   H.winLock = false;
   hostBroadcast({ t:'reset' });
   hostBroadcast({ t:'info', text });
@@ -3267,7 +3338,7 @@ function adminState() {
     maps: Object.entries(MAPS).map(([id, d]) => [id, d.name]),
     sounds: Object.entries(SHOT_SOUNDS).map(([id, s]) => [id, s[0]]),
     // [key, name, slot (0 = gear), default name] — for the weapons table: name, damage, price, ammo price
-    items: [...BUY, 'grenade', 'knife', 'kevlar', 'helmet'].map(k => [k, ITEM_NAME[k], WEAPONS[k]?.slot || 0, DEFAULT_NAMES[k] || ITEM_NAME[k]]),
+    items: [...BUY, 'grenade', 'knife', 'kevlar', 'helmet', 'goggles'].map(k => [k, ITEM_NAME[k], WEAPONS[k]?.slot || 0, DEFAULT_NAMES[k] || ITEM_NAME[k]]),
     players: [...H.players.values()].map(p => ({ id: p.id, name: p.name, team: p.team, money: p.money, k: p.k, d: p.d, bot: !!p.bot, alive: p.alive, hp: p.hp, me: p.id === myId })) };
 }
 function adminRefresh() {
@@ -3556,7 +3627,7 @@ function clientHandle(m) {
       renderBuyMenu();
       break;
     case 'bought': {
-      me.money = m.money; me.armor = m.armor; me.helmet = m.helmet;
+      me.money = m.money; me.armor = m.armor; me.helmet = m.helmet; me.goggles = !!m.goggles;
       const item = m.item;
       if (item === 'grenade') { me.nades = m.nades; me.loadout[7] = 'grenade'; }
       else if (item.startsWith('ammo:')) { const g = item.slice(5); me.reserve[g] = (me.reserve[g] || 0) + WEAPONS[g].mag; }
@@ -3567,7 +3638,7 @@ function clientHandle(m) {
       break;
     }
     case 'buyno': showCenter(`<small>${esc(m.why)}</small>`, 1.5); playSample('empty', 0.5); break;
-    case 'reset': resetLoadout(); resetWorld(); break;
+    case 'reset': resetLoadout(); resetWorld(); me.goggles = false; break;
     case 'team': myTeam = m.team; resetLoadout(); break;
     case 'kicked': showCenter('Создатель игры убрал тебя из игры.', 9999); started = false; document.exitPointerLock(); peer?.destroy(); break;
     case 'bl': bloodHit(m); break;
@@ -3637,6 +3708,7 @@ function clientHandle(m) {
       if (m.victim === myId) {
         me.alive = false; me.firing = false; setZoom(false);
         if (cfg.loseWeapons) resetLoadout();
+        me.goggles = false; // the goggles break when you die
         showCenter(`Тебя подстрелил <span class="n-${m.kt}">${esc(m.kn)}</span><br><small>Возрождение через ${cfg.respawn} сек…${m.penalty ? ' · штраф −$' + m.penalty : ''}</small>`, cfg.respawn);
       }
       if (m.killer === myId) { beep(880, .15, .12, 'triangle'); if (m.reward) moneyPopup(m.reward, m.head ? 'выстрел в голову' : 'убийство'); }
@@ -3842,6 +3914,7 @@ function renderBuyMenu() {
   $('#buyBody').innerHTML =
     BUY_GROUPS.map(([title, list]) => `<div class="buycol"><h3>${title}</h3>${list.map(g => btn('', g, P[g], me.loadout[WEAPONS[g].slot] === g)).join('')}</div>`).join('') +
     `<div class="buycol"><h3>Снаряжение</h3>${btn('', 'kevlar', P.kevlar, me.armor >= 100)}${btn('', 'helmet', helmetPrice, me.armor >= 100 && me.helmet)}` +
+    `${btn('', 'goggles', P.goggles, me.goggles)}` +
     `${btn('', 'grenade', P.grenade, me.nades >= cfg.maxNades)}</div>` +
     `<div class="buycol"><h3>Патроны</h3>${ammoBtns || '<span class="muted">Нет оружия</span>'}</div>`;
   $('#buyMoney').textContent = '$' + me.money;
@@ -4022,7 +4095,7 @@ manager.onLoad = () => {
   $('#go').disabled = false;
   $('#go').textContent = joinCode ? 'Присоединиться к игре' : 'Создать игру';
 };
-manager.onError = url => showErr('Не загрузился файл: ' + url);
+manager.onError = url => showErr('Не загрузился файл: ' + url + '. Обнови страницу (Ctrl+F5) — так бывает, если сайт как раз обновлялся.');
 
 // The host simulation runs on a worker timer: browsers pause requestAnimationFrame
 // in background tabs, but worker messages keep flowing, so the game doesn't freeze for others.
@@ -4060,16 +4133,21 @@ function frame() {
         fx += touch.move.x; fz += touch.move.y; // joystick: pushing it a little walks, all the way runs
       }
       const len = Math.hypot(fx, fz) || 1, push = Math.min(1, len);
-      me.crouch = locked && (keys.ControlLeft || keys.ControlRight || keys.KeyC || touch.crouch);
+      // crouch key held — or no room to stand up (inside a window, under something low)
+      const wantCrouch = locked && (keys.ControlLeft || keys.ControlRight || keys.KeyC || touch.crouch);
+      const wasCrouched = me.crouch;
+      me.crouch = wantCrouch || (me.crouch && colliders.some(b => overlaps(me.pos, b)));
+      // crouching in the air tucks the legs up (like a crouch-jump in CS): that is how you get into a window
+      if (me.crouch && !wasCrouched && !me.onGround) { me.pos.y += 0.4; if (colliders.some(b => overlaps(me.pos, b, CROUCH_H, CROUCH_R))) me.pos.y -= 0.4; }
       const speed = (me.crouch ? WALK * 0.75 : keys.ShiftLeft ? WALK : RUN) * push * (me.weapon === 'knife' ? 1.15 : WEAPONS[me.weapon].heavy || 1);
       const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
       const wx = (fx * cos + fz * sin) / len * speed, wz = (-fx * sin + fz * cos) / len * speed;
       const accel = me.onGround ? 14 : 3;
       me.vel.x += (wx - me.vel.x) * Math.min(1, accel * dt);
       me.vel.z += (wz - me.vel.z) * Math.min(1, accel * dt);
-      if (locked && keys.Space && me.onGround) { me.vel.y = jumpSpeed() * (me.crouch ? 0.8 : 1); me.onGround = false; }
+      if (locked && keys.Space && me.onGround) { me.vel.y = jumpSpeed(); me.onGround = false; }
       me.vel.y -= GRAVITY * dt;
-      me.onGround = moveBody(me.pos, me.vel, dt);
+      me.onGround = moveBody(me.pos, me.vel, dt, me.crouch ? CROUCH_H : HEIGHT, me.crouch ? CROUCH_R : RADIUS);
       // minigun: holding fire spins the barrels up, only then it shoots
       const wq = WEAPONS[me.weapon];
       me.spin = wq.spin ? THREE.MathUtils.clamp((me.spin || 0) + (me.firing ? dt / wq.spin : -dt * 1.2), 0, 1) : 0;
@@ -4150,6 +4228,11 @@ function frame() {
       if (anim !== 'Idle') u.acts[anim].setEffectiveTimeScale(THREE.MathUtils.clamp(sp / ANIM_SPEED[anim], 0.6, 1.5) * (r.back ? -1 : 1));
       if (r.alive) u.mixer.update(dt); // a dead body keeps its last pose (and its missing limbs)
       for (const k in u.guns) u.guns[k].visible = r.alive && r.w === k;
+      // enemies: the name shows only when you can actually see them (or through the goggles); teammates always
+      const enemy = r.team !== myTeam;
+      if (enemy && r.alive && t > u.seenT) { u.seenT = t + 0.15; u.seen = lineOfSight(camera.position, a.position.clone().setY(a.position.y + 1.6)); }
+      u.label.visible = !enemy || (r.alive && (u.seen || me.goggles));
+      if (u.xray) u.xray.visible = enemy && r.alive && !!me.goggles && me.alive;
       // footsteps of nearby players
       if (r.alive && sp > 3.4) {
         r.stepDist = (r.stepDist || 0) + sp * dt;
@@ -4169,6 +4252,7 @@ function frame() {
     $('#money').textContent = '$' + me.money;
     $('#arm').style.display = me.armor > 0 ? 'flex' : 'none';
     $('#armv').textContent = me.armor; $('#helm').style.display = me.helmet ? 'inline' : 'none';
+    $('#gog').style.display = me.goggles && me.alive ? 'inline' : 'none';
     const inZone = me.alive && !buyOpen && inBuyZone(myTeam, [me.pos.x, me.pos.y, me.pos.z]);
     $('#buyhint').style.display = inZone && !IS_TOUCH ? 'block' : 'none';
     if (IS_TOUCH) { // show only the buttons that make sense right now
