@@ -92,6 +92,7 @@
   #radiosay div { background:rgba(0,0,0,.6); padding:4px 14px; font-size:20px; font-weight:700; border-left:3px solid var(--accent); animation:rfade 4.5s forwards; }
   @keyframes rfade { 0%, 80% { opacity:1; } 100% { opacity:0; } }
   #tRadio { left:calc(14px + env(safe-area-inset-left)); top:160px; width:50px; height:50px; }
+  .update { display:none; margin-top:12px; padding:10px 12px; background:#3a2a08; border-left:3px solid var(--accent); font-size:17px; font-weight:600; cursor:pointer; }
   /* ---- phones and tablets */
   #touchLayer, #joyBase, #joyKnob, #tButtons, #rotate { display:none; }
   body.touch #touchLayer { display:block; position:absolute; inset:0; pointer-events:auto; touch-action:none; }
@@ -198,6 +199,7 @@
     <button class="main" id="go" disabled>Загрузка…</button>
     <div class="bar"><div id="loadbar"></div></div>
     <div class="err" id="err"></div>
+    <div class="update" id="update"></div>
   </div>
 </div>
 
@@ -229,6 +231,7 @@
     </div>
     <button id="adminBtn" style="width:100%;margin-top:14px;display:none">⚙ Открыть админ-панель (в новой вкладке)</button>
     <div class="err" id="err2"></div>
+    <div class="update" id="update2"></div>
   </div>
 </div>
 
@@ -407,7 +410,10 @@ const GRAVITY = 20, JUMP = 7.2, RUN = 6.2, WALK = 3, CROUCH_EYE = 1.0;
 // squeeze through gaps down to 0.6 m wide. You stand up again only where there is room.
 const CROUCH_H = 1.05, CROUCH_R = 0.3;
 const jumpSpeed = () => Math.sqrt(2 * GRAVITY * Math.max(0.2, cfg.jump || 1.3)); // speed needed to rise exactly cfg.jump metres
-const PEER_PREFIX = 'kidstrike-v8-'; // bump when the network messages change, so old tabs can't join new games
+const PEER_PREFIX = 'kidstrike-v9-'; // bump when the network messages change, so old tabs can't join new games
+// Which version of the game this page is. GitHub Pages lets browsers keep a page for up to 10 minutes, so after an
+// update somebody may still be playing the old one: the page looks at the site now and then and says so.
+const BUILD = '2026-11-01.2'; // change it with every update of the game
 const BOT_NAMES = ['Робот Вася','Робот Петя','Робот Маша','Робот Гоша','Робот Даша','Робот Федя','Робот Катя','Робот Тима'];
 
 const $ = s => document.querySelector(s);
@@ -3506,6 +3512,10 @@ function checkRound() {
   const R = H.round;
   if (R.over || H.winLock || !roundsOn()) return;
   const ct = teamCount('ct', true), t = teamCount('t', true);
+  // every real player is dead: nobody wants to watch the bots finish it — the round ends now, the team with more
+  // players left standing wins it
+  const people = [...H.players.values()].filter(q => !q.bot);
+  if (ct && t && people.length && !people.some(q => q.alive)) return endRound(ct > t ? 'ct' : t > ct ? 't' : null);
   if (ct && t) return;
   endRound(ct ? 'ct' : t ? 't' : null);
 }
@@ -4587,7 +4597,21 @@ ticker.onmessage = () => {
   if (isHost && started) hostTick(dt);
 };
 
-window.__ks = { me, remotes, tryFire, NAVN, NAV, findPath, navAt, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, BURST, hands, HOLD, POSE, HAND_SHIFT, ELBOW_DIR, startReload, get cfg() { return cfg; } }; // handy for debugging in the console
+// a newer version on the site: tell the player (the menu and the pause menu), a click reloads the page
+async function checkUpdate() {
+  try {
+    const html = await (await fetch(location.pathname + '?build=' + Date.now(), { cache: 'no-store' })).text();
+    const v = html.match(/const BUILD = '([^']+)'/)?.[1];
+    if (!v || v === BUILD) return;
+    for (const id of ['#update', '#update2']) {
+      const el = $(id);
+      el.textContent = '🔄 Вышла новая версия игры — нажми здесь, чтобы обновить страницу' + (started ? ' (игра начнётся заново)' : '');
+      el.style.display = 'block'; el.onclick = () => location.reload();
+    }
+  } catch {}
+}
+if (location.protocol.startsWith('http')) { checkUpdate(); setInterval(checkUpdate, 120000); }
+window.__ks = { me, remotes, tryFire, checkUpdate, NAVN, NAV, findPath, navAt, camera, applyQuality, makeAvatar, setAnim, vmModels, toggleBuy, killEffect, adminCommand, adminUrl, switchMap, setPlaying, keys, hostDamage, jumpSpeed, dropMeshes, H, hostThrow, explosion, walls, props, hostBlast, colliders, SND, BURST, hands, HOLD, POSE, HAND_SHIFT, ELBOW_DIR, startReload, get cfg() { return cfg; } }; // handy for debugging in the console
 
 // auto-lower graphics once if the computer can't keep up (unless the player chose a level)
 const perf = { frames: 0, time: 0 };

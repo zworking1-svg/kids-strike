@@ -153,7 +153,7 @@ function connect() {
   $('#room').textContent = 'Комната: ' + room;
   const peer = new Peer(undefined, { debug: 1 });
   peer.on('open', () => {
-    conn = peer.connect('kidstrike-v8-' + room, { reliable: true });
+    conn = peer.connect('kidstrike-v9-' + room, { reliable: true }); // must match PEER_PREFIX in the game
     conn.on('open', () => conn.send({ t:'admHello', key }));
     conn.on('data', onData);
     conn.on('close', () => setStatus('Игра закрыта — открой её снова и обнови эту страницу', 'bad'));
