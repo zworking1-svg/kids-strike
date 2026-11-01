@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Студия голоса — Kids Strike</title>
+<style>
+  :root {
+    --bg: #14171c; --panel: #1e232b; --panel2: #262c36; --line: #343c48;
+    --text: #e8ecf1; --muted: #9aa5b4; --accent: #ffb020; --rec: #ff4d4d;
+    --ok: #3ecf8e; --wave: #5fb3ff; --sel: rgba(255, 176, 32, .18);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  h2 { margin: 0 0 12px; font-size: 18px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px; }
+  button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 14px; font: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #recBtn { background: var(--rec); border-color: var(--rec); color: #fff; font-weight: 600;
+    font-size: 17px; padding: 12px 22px; }
+  #recBtn.on { animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .6; } }
+  .meter { flex: 1; min-width: 120px; height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; background: var(--ok); transition: width .05s; }
+  #timer { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 52px; }
+  canvas { width: 100%; height: 160px; display: block; background: #10131a; border-radius: 8px;
+    margin: 12px 0; touch-action: none; cursor: ew-resize; }
+  .hint { color: var(--muted); font-size: 13px; }
+  input[type=text] { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 10px; font: inherit; min-width: 0; flex: 1; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+  .presets button { padding: 6px 10px; font-size: 13px; }
+  .primary { background: var(--accent); border-color: var(--accent); color: #1b1300; font-weight: 600; }
+  ul.takes { list-style: none; margin: 0; padding: 0; }
+  ul.takes li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0;
+    border-top: 1px solid var(--line); }
+  ul.takes li:first-child { border-top: 0; }
+  ul.takes .name { flex: 1; min-width: 140px; word-break: break-all; }
+  ul.takes .dur { color: var(--muted); font-size: 13px; }
+  #status { min-height: 1.4em; color: var(--ok); margin-top: 8px; }
+  #status.err { color: var(--rec); }
+  ol { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  .read { background: var(--panel2); border-left: 3px solid var(--accent); padding: 10px 12px;
+    border-radius: 6px; margin: 8px 0; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  #drop.over { outline: 2px dashed var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎙️ Студия голоса</h1>
+  <p class="sub">Запиши свой голос, обрежь лишнее, скачай или положи прямо в игру Kids Strike.</p>
+
+  <section id="drop">
+    <h2>1. Запись</h2>
+    <div class="row">
+      <button id="recBtn">● Записать</button>
+      <span id="timer">0:00</span>
+      <div class="meter"><div id="level"></div></div>
+    </div>
+    <p class="hint">Пробел — начать и остановить запись. Можно перетащить сюда готовый звук (например, из VoiceStudio).
+      <label class="btn" style="padding:4px 10px;font-size:13px">Открыть файл…<input id="fileIn" type="file" accept="audio/*" hidden></label></p>
+  </section>
+
+  <section>
+    <h2>2. Обрезка и прослушивание</h2>
+    <canvas id="wave"></canvas>
+    <div class="row">
+      <button id="playBtn" disabled>▶ Слушать</button>
+      <button id="stopBtn" disabled>■ Стоп</button>
+      <button id="autoBtn" disabled title="Убрать тишину в начале и в конце">✂ Убрать тишину</button>
+      <button id="resetBtn" disabled>↺ Весь звук</button>
+      <label class="chk"><input id="normChk" type="checkbox" checked> громкость на максимум</label>
+    </div>
+    <p class="hint">Тяни левую или правую границу мышкой. Слушается и сохраняется только выделенный кусок.</p>
+  </section>
+
+  <section>
+    <h2>3. Сохранить</h2>
+    <div class="row presets" id="presets"></div>
+    <div class="row" style="margin-top:10px">
+      <input id="nameIn" type="text" value="moy_golos" spellcheck="false">
+      <span class="hint">.wav</span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="saveBtn" class="primary" disabled>⬇ Скачать WAV</button>
+      <button id="gameBtn" disabled title="Записать файл в папку assets/snd/voice игры — он появится в радио (Z / X) в админ-панели">🎮 Положить в игру</button>
+      <button id="keepBtn" disabled>＋ В список дублей</button>
+    </div>
+    <div id="status"></div>
+  </section>
+
+  <section>
+    <h2>Мои дубли</h2>
+    <ul class="takes" id="takes"></ul>
+    <p class="hint" id="noTakes">Пока пусто. Нажми «В список дублей», чтобы сохранить запись здесь — она останется и после перезагрузки страницы.</p>
+  </section>
+
+  <section>
+    <h2>Озвучка текста своим голосом (VoiceStudio)</h2>
+    <p>Клонирование голоса делает программа <b>VoiceStudio</b> на этом компьютере. Сайт готовит для неё образец голоса.</p>
+    <ol>
+      <li>Запиши образец: 10–20 секунд, спокойно и чётко, без музыки и шума. Можно прочитать это:
+        <div class="read">Привет! Сегодня мы играем в Kids Strike. Команда, за мной! Берём точку А, прикрываем друг друга и не забываем про гранаты.</div>
+      </li>
+      <li>Нажми «✂ Убрать тишину», выключать громкость не нужно, потом «⬇ Скачать WAV» с именем <code>obrazec</code>.</li>
+      <li>Открой VoiceStudio → <b>Voice cloning</b> → добавь голос и загрузи <code>obrazec.wav</code>. В поле текста образца впиши то, что читал.</li>
+      <li>Напиши новую фразу, нажми Generate и сохрани результат.</li>
+      <li>Перетащи готовый звук на этот сайт (раздел 1), обрежь и нажми «🎮 Положить в игру».</li>
+    </ol>
+    <p class="hint">Без видеокарты VoiceStudio тоже работает, только медленнее. Для русского языка выбирай модель, у которой в списке языков есть Russian.</p>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const PRESETS = [
+  ['Огонь!', 'voice_fire'], ['Граната!', 'voice_grenade'], ['Перезаряжаю!', 'voice_reload'],
+  ['Прикрой!', 'voice_cover'], ['Ай!', 'voice_hurt'], ['Победа!', 'voice_win'],
+  ['За мной!', 'voice_follow'], ['Враг!', 'voice_enemy'],
+];
+
+let ctx = null;          // AudioContext, created on first click
+let buf = null;          // current AudioBuffer (mono)
+let selA = 0, selB = 0;  // selection in seconds
+let player = null, playStart = 0, playFrom = 0;
+let rec = null, recStream = null, recChunks = [], recT0 = 0, meterRaf = 0;
+
+function audio() {
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+
+function say(msg, err) {
+  const s = $('status');
+  s.textContent = msg;
+  s.className = err ? 'err' : '';
+}
+
+// ---------- recording ----------
+async function startRec() {
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: false },
+    });
+  } catch (e) {
+    say('Нет доступа к микрофону. Разреши его в браузере (значок слева от адреса).', true);
+    return;
+  }
+  const ac = audio();
+  const an = ac.createAnalyser();
+  an.fftSize = 1024;
+  ac.createMediaStreamSource(recStream).connect(an);
+  const data = new Float32Array(an.fftSize);
+  const tick = () => {
+    an.getFloatTimeDomainData(data);
+    let peak = 0;
+    for (const v of data) peak = Math.max(peak, Math.abs(v));
+    $('level').style.width = Math.min(100, peak * 100) + '%';
+    $('level').style.background = peak > 0.95 ? 'var(--rec)' : 'var(--ok)';
+    const t = (performance.now() - recT0) / 1000;
+    $('timer').textContent = fmt(t);
+    meterRaf = requestAnimationFrame(tick);
+  };
+  recChunks = [];
+  rec = new MediaRecorder(recStream);
+  rec.ondataavailable = e => e.data.size && recChunks.push(e.data);
+  rec.onstop = async () => {
+    cancelAnimationFrame(meterRaf);
+    $('level').style.width = '0';
+    recStream.getTracks().forEach(t => t.stop());
+    await loadBlob(new Blob(recChunks, { type: rec.mimeType }));
+    autoTrim();
+    say('Готово! Послушай и обрежь, если нужно.');
+  };
+  rec.start();
+  recT0 = performance.now();
+  tick();
+  $('recBtn').textContent = '■ Остановить';
+  $('recBtn').classList.add('on');
+  say('Идёт запись… говори!');
+}
+
+function stopRec() {
+  if (rec && rec.state === 'recording') rec.stop();
+  $('recBtn').textContent = '● Записать';
+  $('recBtn').classList.remove('on');
+}
+
+$('recBtn').onclick = () => (rec && rec.state === 'recording') ? stopRec() : startRec();
+
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.target.tagName === 'INPUT' || e.repeat) return;
+  e.preventDefault();
+  $('recBtn').click();
+});
+
+// ---------- loading ----------
+async function loadBlob(blob) {
+  try {
+    const raw = await audio().decodeAudioData(await blob.arrayBuffer());
+    buf = toMono(raw);
+  } catch (e) {
+    say('Не получилось прочитать этот звук.', true);
+    return;
+  }
+  selA = 0; selB = buf.duration;
+  ['playBtn', 'stopBtn', 'autoBtn', 'resetBtn', 'saveBtn', 'gameBtn', 'keepBtn'].forEach(id => $(id).disabled = false);
+  draw();
+}
+
+function toMono(src) {
+  if (src.numberOfChannels === 1) return src;
+  const out = audio().createBuffer(1, src.length, src.sampleRate);
+  const d = out.getChannelData(0);
+  for (let c = 0; c < src.numberOfChannels; c++) {
+    const s = src.getChannelData(c);
+    for (let i = 0; i < s.length; i++) d[i] += s[i] / src.numberOfChannels;
+  }
+  return out;
+}
+
+$('fileIn').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  await loadBlob(f);
+  $('nameIn').value = safeName(f.name.replace(/\.[^.]+$/, ''));
+  say('Файл открыт: ' + f.name);
+  e.target.value = '';
+};
+const drop = $('drop');
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = async e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  await loadBlob(f);
+  $('nameIn').value = safeName(f.name.replace(/\.[^.]+$/, ''));
+  say('Файл открыт: ' + f.name);
+};
+
+// ---------- waveform & trimming ----------
+const cv = $('wave');
+function draw(cursor) {
+  const w = cv.width = cv.clientWidth * devicePixelRatio;
+  const h = cv.height = cv.clientHeight * devicePixelRatio;
+  const g = cv.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  if (!buf) {
+    g.fillStyle = '#9aa5b4';
+    g.font = `${14 * devicePixelRatio}px system-ui`;
+    g.textAlign = 'center';
+    g.fillText('Здесь появится твой звук', w / 2, h / 2);
+    return;
+  }
+  const d = buf.getChannelData(0), dur = buf.duration;
+  const xa = selA / dur * w, xb = selB / dur * w;
+  g.fillStyle = 'rgba(255,176,32,.18)';
+  g.fillRect(xa, 0, xb - xa, h);
+  const step = d.length / w;
+  for (let x = 0; x < w; x++) {
+    let mn = 1, mx = -1;
+    for (let i = Math.floor(x * step), e = Math.floor((x + 1) * step); i < e; i++) {
+      if (d[i] < mn) mn = d[i];
+      if (d[i] > mx) mx = d[i];
+    }
+    g.fillStyle = (x >= xa && x <= xb) ? '#5fb3ff' : '#3a4656';
+    g.fillRect(x, (1 - mx) * h / 2, 1, Math.max(1, (mx - mn) * h / 2));
+  }
+  g.fillStyle = '#ffb020';
+  g.fillRect(xa - devicePixelRatio, 0, 2 * devicePixelRatio, h);
+  g.fillRect(xb - devicePixelRatio, 0, 2 * devicePixelRatio, h);
+  if (cursor != null) {
+    g.fillStyle = '#fff';
+    g.fillRect(cursor / dur * w, 0, devicePixelRatio, h);
+  }
+}
+window.addEventListener('resize', () => draw());
+
+let dragging = null;
+cv.onpointerdown = e => {
+  if (!buf) return;
+  const t = xToTime(e);
+  dragging = Math.abs(t - selA) < Math.abs(t - selB) ? 'a' : 'b';
+  cv.setPointerCapture(e.pointerId);
+  moveEdge(t);
+};
+cv.onpointermove = e => dragging && moveEdge(xToTime(e));
+cv.onpointerup = () => dragging = null;
+function xToTime(e) {
+  const r = cv.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * buf.duration;
+}
+function moveEdge(t) {
+  if (dragging === 'a') selA = Math.min(t, selB - 0.02);
+  else selB = Math.max(t, selA + 0.02);
+  draw();
+}
+
+function autoTrim() {
+  if (!buf) return;
+  const d = buf.getChannelData(0), sr = buf.sampleRate, win = Math.floor(sr * 0.01);
+  let peak = 0;
+  for (const v of d) peak = Math.max(peak, Math.abs(v));
+  const thr = Math.max(0.008, peak * 0.06);
+  const loud = i => {
+    let s = 0;
+    for (let j = i; j < i + win && j < d.length; j++) s += d[j] * d[j];
+    return Math.sqrt(s / win) > thr;
+  };
+  let a = 0, b = d.length - win;
+  while (a < b && !loud(a)) a += win;
+  while (b > a && !loud(b)) b -= win;
+  if (b <= a) return;
+  selA = Math.max(0, a / sr - 0.05);
+  selB = Math.min(buf.duration, (b + win) / sr + 0.08);
+  draw();
+}
+$('autoBtn').onclick = autoTrim;
+$('resetBtn').onclick = () => { selA = 0; selB = buf.duration; draw(); };
+
+// ---------- playback ----------
+function stopPlay() {
+  if (player) { player.onended = null; player.stop(); player = null; }
+  draw();
+}
+$('playBtn').onclick = () => {
+  stopPlay();
+  const ac = audio();
+  player = ac.createBufferSource();
+  player.buffer = selection();
+  player.connect(ac.destination);
+  player.onended = () => { player = null; draw(); };
+  player.start();
+  playStart = ac.currentTime;
+  playFrom = selA;
+  const anim = () => {
+    if (!player) return;
+    draw(playFrom + ac.currentTime - playStart);
+    requestAnimationFrame(anim);
+  };
+  anim();
+};
+$('stopBtn').onclick = stopPlay;
+
+// The selected piece as a new buffer: optional peak normalising and short fades against clicks.
+function selection() {
+  const sr = buf.sampleRate;
+  const a = Math.floor(selA * sr), b = Math.floor(selB * sr);
+  const out = audio().createBuffer(1, Math.max(1, b - a), sr);
+  const d = out.getChannelData(0);
+  d.set(buf.getChannelData(0).subarray(a, b));
+  if ($('normChk').checked) {
+    let peak = 0;
+    for (const v of d) peak = Math.max(peak, Math.abs(v));
+    if (peak > 0.001) for (let i = 0; i < d.length; i++) d[i] *= 0.95 / peak;
+  }
+  const fade = Math.min(Math.floor(sr * 0.005), d.length >> 1);
+  for (let i = 0; i < fade; i++) {
+    d[i] *= i / fade;
+    d[d.length - 1 - i] *= i / fade;
+  }
+  return out;
+}
+
+// ---------- WAV export ----------
+function wavBlob(ab) {
+  const d = ab.getChannelData(0), sr = ab.sampleRate;
+  const out = new DataView(new ArrayBuffer(44 + d.length * 2));
+  const str = (o, s) => [...s].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); out.setUint32(4, 36 + d.length * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+  out.setUint32(24, sr, true); out.setUint32(28, sr * 2, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+  str(36, 'data'); out.setUint32(40, d.length * 2, true);
+  for (let i = 0; i < d.length; i++) {
+    const v = Math.max(-1, Math.min(1, d[i]));
+    out.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return new Blob([out], { type: 'audio/wav' });
+}
+
+function safeName(s) {
+  const tr = { а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',
+    п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya',
+    ә:'a',ғ:'g',қ:'k',ң:'n',ө:'o',ұ:'u',ү:'u',һ:'h',і:'i' };
+  return s.toLowerCase().split('').map(c => tr[c] ?? c).join('')
+    .replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'moy_golos';
+}
+const fileName = () => safeName($('nameIn').value) + '.wav';
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$('saveBtn').onclick = () => {
+  download(wavBlob(selection()), fileName());
+  say('Скачано: ' + fileName() + ' (смотри в папке «Загрузки»)');
+};
+
+// Writes into a folder the user picks (Chrome / Edge only). Asks once per page visit.
+let gameDir = null;
+async function saveToGame(blob, name) {
+  if (!window.showDirectoryPicker) {
+    say('Этот браузер не умеет сохранять в папку. Открой сайт в Chrome или Edge, или нажми «Скачать WAV».', true);
+    return;
+  }
+  try {
+    if (!gameDir) {
+      say('Выбери папку игры: CS → assets → snd → voice');
+      const dir = await window.showDirectoryPicker({ id: 'kids-strike-snd', mode: 'readwrite' });
+      // the voice page's own folder is also called "voice" — the game doesn't look there
+      let site = false; try { await dir.getFileHandle('index.html'); site = true; } catch {}
+      if (site || dir.name !== 'voice') { say('Это не та папка. Выбери CS → assets → snd → voice (не CS → voice, там лежит этот сайт).', true); return; }
+      gameDir = dir;
+    }
+    const fh = await gameDir.getFileHandle(name, { create: true });
+    const w = await fh.createWritable();
+    await w.write(blob);
+    await w.close();
+    await addToVoiceList(name);
+    say(`Сохранено в папку «${gameDir.name}»: ${name}. В админ-панели игры (раздел «Радио») нажми «Обновить список записей».`);
+  } catch (e) {
+    if (e.name !== 'AbortError') say('Не получилось сохранить: ' + e.message, true);
+    else say('');
+  }
+}
+$('gameBtn').onclick = () => saveToGame(wavBlob(selection()), fileName());
+// The game's radio reads voice.json in the same folder: a list of { file, text } for the admin panel to choose from.
+// The text is the phrase itself: the preset's label, or whatever was typed in the name box.
+async function addToVoiceList(name) {
+  const fh = await gameDir.getFileHandle('voice.json', { create: true });
+  let list = [];
+  try { list = JSON.parse(await (await fh.getFile()).text() || '[]'); } catch {}
+  if (!Array.isArray(list)) list = [];
+  const preset = PRESETS.find(([, file]) => file + '.wav' === name);
+  const text = preset ? preset[0] : $('nameIn').value.trim();
+  list = list.filter(v => v && v.file !== name);
+  list.push({ file: name, text });
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify(list, null, 1));
+  await w.close();
+}
+
+// ---------- presets ----------
+PRESETS.forEach(([label, file]) => {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.title = file + '.wav';
+  b.onclick = () => { $('nameIn').value = file; say('Имя файла: ' + file + '.wav'); };
+  $('presets').appendChild(b);
+});
+
+// ---------- takes (kept in IndexedDB) ----------
+const DB = new Promise((ok, fail) => {
+  const r = indexedDB.open('voice-studio', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('takes', { keyPath: 'id', autoIncrement: true });
+  r.onsuccess = () => ok(r.result);
+  r.onerror = () => fail(r.error);
+});
+async function store(mode, fn) {
+  const db = await DB;
+  return new Promise((ok, fail) => {
+    const tx = db.transaction('takes', mode);
+    const req = fn(tx.objectStore('takes'));
+    tx.oncomplete = () => ok(req && req.result);
+    tx.onerror = () => fail(tx.error);
+  });
+}
+
+async function renderTakes() {
+  let list = [];
+  try { list = await store('readonly', s => s.getAll()); } catch (e) { /* storage blocked */ }
+  const ul = $('takes');
+  ul.innerHTML = '';
+  $('noTakes').hidden = list.length > 0;
+  for (const t of list.reverse()) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="name"></span><span class="dur">${t.dur.toFixed(1)} с</span>`;
+    li.querySelector('.name').textContent = t.name;
+    const btn = (txt, fn) => { const b = document.createElement('button'); b.textContent = txt; b.onclick = fn; li.appendChild(b); };
+    btn('▶', async () => {
+      stopPlay();
+      const ac = audio();
+      player = ac.createBufferSource();
+      player.buffer = await ac.decodeAudioData(await t.blob.arrayBuffer());
+      player.connect(ac.destination);
+      player.onended = () => player = null;
+      player.start();
+    });
+    btn('✎ Открыть', async () => { await loadBlob(t.blob); $('nameIn').value = t.name.replace(/\.wav$/, ''); say('Дубль открыт для обрезки'); });
+    btn('⬇', () => download(t.blob, t.name));
+    btn('🎮', () => saveToGame(t.blob, t.name));
+    btn('🗑', async () => { if (confirm('Удалить ' + t.name + '?')) { await store('readwrite', s => s.delete(t.id)); renderTakes(); } });
+    ul.appendChild(li);
+  }
+}
+
+$('keepBtn').onclick = async () => {
+  const sel = selection();
+  try {
+    await store('readwrite', s => s.add({ name: fileName(), blob: wavBlob(sel), dur: sel.duration }));
+    say('Добавлено в список дублей');
+  } catch (e) {
+    say('Браузер не дал сохранить дубль. Скачай его кнопкой «Скачать WAV».', true);
+  }
+  renderTakes();
+};
+
+draw();
+renderTakes();
+</script>
+</body>
+</html>

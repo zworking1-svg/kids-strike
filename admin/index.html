@@ -234,15 +234,34 @@ const VOICE_PRESETS = [['voice_fire.wav', 'Огонь!'], ['voice_grenade.wav', 
   ['voice_hurt.wav', 'Ай!'], ['voice_win.wav', 'Победа!'], ['voice_follow.wav', 'За мной!'], ['voice_enemy.wav', 'Враг!']];
 const MENUS = [['z', 'Z'], ['x', 'X']];
 let voices = [], voiceOk = {};
+// every sound file actually lying in the folder: on GitHub Pages GitHub's own list of the folder, on the local test
+// server (python -m http.server) the folder's page; anything else just has voice.json
+const AUDIO = /\.(wav|mp3|ogg|webm|m4a)$/i;
+async function folderFiles() {
+  try {
+    if (/\.github\.io$/.test(location.hostname)) {
+      const owner = location.hostname.split('.')[0], repo = location.pathname.split('/')[1];
+      const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/assets/snd/voice`, { cache: 'no-store' });
+      return r.ok ? (await r.json()).map(f => f.name).filter(n => AUDIO.test(n)) : [];
+    }
+    const r = await fetch(VOICE_DIR, { cache: 'no-store' });
+    if (!r.ok) return [];
+    return [...(await r.text()).matchAll(/href="([^"?#/]+)"/g)].map(m => decodeURIComponent(m[1])).filter(n => AUDIO.test(n));
+  } catch { return []; }
+}
 async function loadVoices() {
   let list = [];
   try { const r = await fetch(VOICE_DIR + 'voice.json', { cache: 'no-store' }); if (r.ok) list = (await r.json()).map(v => [v.file, v.text]); } catch {}
+  const found = await folderFiles();
   const seen = new Set(); voices = [];
-  for (const [file, text] of [...list, ...VOICE_PRESETS]) if (file && !seen.has(file)) { seen.add(file); voices.push([file, text || '']); }
+  for (const [file, text] of [...list, ...found.map(f => [f, '']), ...VOICE_PRESETS]) if (file && !seen.has(file)) { seen.add(file); voices.push([file, text || '']); }
   // which files really exist (a standard name with no recording yet is marked)
   voiceOk = {};
-  await Promise.all(voices.map(([f]) => fetch(VOICE_DIR + f, { method: 'HEAD', cache: 'no-store' }).then(r => { voiceOk[f] = r.ok; }).catch(() => { voiceOk[f] = false; })));
-  $('#voiceInfo').textContent = `Записей в папке: ${Object.values(voiceOk).filter(Boolean).length}`;
+  for (const f of found) voiceOk[f] = true;
+  await Promise.all(voices.map(([f]) => fetch(VOICE_DIR + encodeURIComponent(f), { method: 'HEAD', cache: 'no-store' }).then(r => { voiceOk[f] = r.ok; }).catch(() => { voiceOk[f] = false; })));
+  voices.sort((a, b) => (voiceOk[b[0]] ? 1 : 0) - (voiceOk[a[0]] ? 1 : 0)); // the real recordings first
+  $('#voiceInfo').textContent = `Записей в папке: ${Object.values(voiceOk).filter(Boolean).length}` +
+    (/\.github\.io$/.test(location.hostname) ? ' (на сайте видны только записи, отправленные на GitHub)' : '');
   $('#radio').innerHTML = ''; // rebuild the selects with the new list
   if (state) renderRadio(state.cfg.radio);
 }
@@ -252,7 +271,7 @@ let hearing = null;
 function hear(file) {
   if (!file) return;
   hearing?.pause();
-  hearing = new Audio(VOICE_DIR + file);
+  hearing = new Audio(VOICE_DIR + encodeURIComponent(file));
   hearing.play().catch(() => alert('Не получилось проиграть ' + file + ' — такого файла ещё нет в assets/snd/voice'));
 }
 function renderRadio(radio) {
