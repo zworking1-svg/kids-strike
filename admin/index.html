@@ -88,12 +88,16 @@
       <label>За убийство, $<input type="number" data-cfg="killReward" min="0" step="50"></label>
       <label>За убийство в голову, $<input type="number" data-cfg="headReward" min="0" step="50"></label>
       <label>Штраф за смерть, $<input type="number" data-cfg="deathPenalty" min="0" step="50"></label>
+      <label>Команде за победу в раунде, $<input type="number" data-cfg="roundWin" min="0" step="100"></label>
+      <label>Команде за проигранный раунд, $<input type="number" data-cfg="roundLoss" min="0" step="100"></label>
       <label>Максимум денег, $<input type="number" data-cfg="maxMoney" min="0" step="1000"></label>
     </section>
     <section>
       <h2>Правила</h2>
-      <label>Убийств для победы<input type="number" data-cfg="winKills" min="1" max="500"></label>
+      <label>Побед в раундах для победы в матче<input type="number" data-cfg="winRounds" min="1" max="100"></label>
+      <label>Длина раунда, сек<input type="number" data-cfg="roundTime" min="30" max="1800" step="10"></label>
       <label>Возрождение через, сек<input type="number" data-cfg="respawn" min="0" max="30"></label>
+      <p class="muted">Раунд кончается, когда погибла вся команда (или вышло время — тогда побеждает команда, у которой больше живых). Возрождение — только если играть не против кого (одна команда пустая).</p>
       <label class="chk"><input type="checkbox" data-cfg="loseWeapons"> Терять оружие при смерти</label>
       <label class="chk"><input type="checkbox" data-cfg="buyAnywhere"> Покупать в любом месте карты</label>
       <label class="chk"><input type="checkbox" data-cfg="infAmmo"> Бесконечные патроны</label>

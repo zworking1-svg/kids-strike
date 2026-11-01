@@ -67,6 +67,8 @@
   #dmg { position:absolute; inset:0; box-shadow:inset 0 0 160px rgba(200,0,0,.8); opacity:0; transition:opacity .35s; }
   #center { position:absolute; left:50%; top:28%; transform:translateX(-50%); text-align:center; font-size:34px; font-weight:700; }
   #center small { font-size:20px; color:#d6dbe2; }
+  #spec { position:absolute; left:50%; bottom:90px; transform:translateX(-50%); font-size:20px; font-weight:700; background:rgba(0,0,0,.55); padding:4px 16px; display:none; }
+  #spec small { font-size:14px; color:var(--muted); margin-left:8px; }
   #board { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:var(--panel); backdrop-filter:blur(6px); padding:16px 22px; display:none; min-width:min(600px,94vw); border-top:3px solid var(--accent); }
   #board table { width:100%; border-collapse:collapse; font-size:19px; font-weight:600; }
   #board td,#board th { padding:5px 10px; text-align:left; border-bottom:1px solid var(--line); }
@@ -222,7 +224,8 @@
       <b>E</b> подобрать оружие &nbsp; <b>G</b> выбросить оружие &nbsp; <b>B</b> магазин (на своей базе)<br>
       <b>Z</b> радио: команды &nbsp; <b>X</b> радио: ответы — потом цифра <b>1</b>…<b>9</b>, фразу услышат все<br>
       Граната: зажми <b>ЛКМ</b> и отпусти — бросок далеко, <b>ПКМ</b> — под ноги<br>
-      <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Деньги: убийство +$500, в голову +$1000, смерть — штраф.
+      <b>Tab</b> счёт &nbsp; <b>Esc</b> пауза. Счёт — выигранные раунды: погибла вся команда — раунд проигран.<br>
+      Деньги: убийство +$500, в голову +$1000, смерть — штраф, за раунд команде +$2500 / +$1000.
     </div>
     <button id="adminBtn" style="width:100%;margin-top:14px;display:none">⚙ Открыть админ-панель (в новой вкладке)</button>
     <div class="err" id="err2"></div>
@@ -252,13 +255,14 @@
   </div>
   <div id="roomtag"></div>
   <div id="fps"></div>
-  <div id="score"><div class="c" id="sct">0</div><div class="mid" id="goal">до 25</div><div class="tt" id="st">0</div></div>
+  <div id="score"><div class="c" id="sct">0</div><div class="mid" id="goal">до 8</div><div class="tt" id="st">0</div></div>
   <div id="feed"></div>
   <div id="cross"><i></i><i></i><i></i><i></i></div>
   <div id="hitmark"></div>
   <div id="dmg"></div>
   <div id="flash"></div>
   <div id="center"></div>
+  <div id="spec"></div>
   <div id="money">$0</div>
   <div id="moneypops"></div>
   <div id="buyhint">B — магазин</div>
@@ -366,7 +370,8 @@ function weaponSound(w) { return SHOT_SOUNDS[cfg.sound?.[w]] ? cfg.sound[w] : DE
 // the creator of the game can change all of these in the admin panel
 const DEFAULT_CFG = {
   startMoney:10000, killReward:500, headReward:1000, deathPenalty:300, maxMoney:50000,
-  winKills:25, respawn:3, ff:false, buyAnywhere:false, infAmmo:false, loseWeapons:true,
+  winRounds:8, roundTime:180, roundWin:2500, roundLoss:1000, // rounds, like in CS: won rounds count, not kills
+  respawn:3, ff:false, buyAnywhere:false, infAmmo:false, loseWeapons:true,
   blood:true, gore:true, botLevel:1, maxNades:1, nadePower:100, map:'dust',
   jump: 1.3,          // jump height in metres
   prices: { ak47:2700, m4:2900, uzi:1200, shotgun:1050, dbshotgun:1400, sniper:4750, zhangomet:8000, laser:4500, minigun:7000, launcher:5000, rpg:6500,
@@ -3235,7 +3240,7 @@ let myId = null, started = false, locked = false, showBoard = false, gamePaused 
 let peer = null, isHost = false, hostConn = null, roomCode = '';
 const conns = new Map();      // host: peerId -> DataConnection
 const remotes = new Map();    // everyone: id -> { avatar, name, team, target, ry, alive, k, d, hp }
-let teamScore = { ct:0, t:0 };
+let teamScore = { ct:0, t:0 }, roundLeft = -1; // won rounds; seconds left in the round (-1: no round going on)
 
 function sendToHost(msg) {
   if (isHost) hostHandle(myId, msg);
@@ -3261,7 +3266,6 @@ function startHost() {
     cfg.map = myMap; store.set('ks-cfg', JSON.stringify(cfg));
     await switchMap(cfg.map);
     $('#adminBtn').style.display = 'block';
-    $('#goal').textContent = 'до ' + cfg.winKills;
     for (let i = 0; i < botCount; i++) addBot(i % 2 === 0 ? (myTeam === 'ct' ? 't' : 'ct') : myTeam);
     hostHandle(myId, { t:'hello', name: myName, team: myTeam });
     enterGame();
@@ -3309,7 +3313,8 @@ function startClient() {
 function showErr(t) { $('#err').textContent = t; $('#err2').textContent = t; }
 
 // ================= HOST: authoritative game state =================
-const H = { players: new Map(), bots: [], snapTimer: 0, winLock: false, paused: false, drops: new Map() };
+const H = { players: new Map(), bots: [], snapTimer: 0, winLock: false, paused: false, drops: new Map(),
+  rounds: { ct: 0, t: 0 }, round: { n: 0, start: 0, end: 0, over: true } };
 let dropSeq = 0;
 function hostDrop(w, pos) {
   const d = { did: 'd' + (dropSeq++), w, p: [+pos[0].toFixed(2), +floorY(pos[0], pos[1] + 0.5, pos[2]).toFixed(2), +pos[2].toFixed(2)], t: now() };
@@ -3339,7 +3344,7 @@ function hostBroadcast(msg, except) {
 function hostRemove(id) {
   conns.delete(id);
   const p = H.players.get(id);
-  if (p) { H.players.delete(id); hostBroadcast({ t:'info', text: p.name + ' вышел из игры' }); }
+  if (p) { H.players.delete(id); hostBroadcast({ t:'info', text: p.name + ' вышел из игры' }); checkRound(); }
 }
 function hostSpawn(p) {
   p.alive = true; p.hp = 100; p.p = pickSpawn(p.team);
@@ -3361,7 +3366,12 @@ function hostHandle(from, m) {
     hostSend(from, { t:'cfg', cfg });
     if (from !== myId) hostSend(from, worldState()); // someone joining later sees the ruins that are already there
     if (H.paused) hostSend(from, { t:'pause', on: true });
-    hostSpawn(p);
+    // a round already going on for a while: wait for the next one (unless that leaves nobody to play with)
+    const R = H.round;
+    if (R.over || now() - R.start < 15 || !roundsOn() || !H.roundsWereOn || teamCount(p.team, true) === 0) hostSpawn(p);
+    else hostSend(from, { t:'wait' });
+    if (R.over && !H.winLock && R.n === 0) { startRound(); H.roundsWereOn = roundsOn(); }
+    else checkRound();
     hostBroadcast({ t:'info', text: p.name + ' зашёл за команду «' + TEAM_NAME[p.team] + '»' });
     adminRefresh();
     return;
@@ -3470,21 +3480,66 @@ function hostDamage(fromId, targetId, dmg, part, w, pt, dir, src) {
     if (cfg.loseWeapons) v.nades = 0;
     hostBroadcast({ t:'kill', killer: a.id, victim: v.id, kn: a.name, kt: a.team, vn: v.name, vt: v.team, head, part, w, from: src || a.p,
       reward, penalty: cfg.deathPenalty });
-    const score = { ct:0, t:0 }; for (const q of H.players.values()) score[q.team] += q.k;
-    if (score[a.team] >= cfg.winKills) {
-      H.winLock = true;
-      hostBroadcast({ t:'win', team: a.team });
-      setTimeout(() => hostRestart('Новый матч!'), 6000);
-    } else whenRunning(() => { if (H.players.get(v.id) === v && !H.winLock && !v.alive) hostSpawn(v); }, cfg.respawn * 1000);
+    afterDeath(v); // the next round, or (playing without an enemy team) back after a few seconds
   }
+}
+// ---- rounds, like in CS. Nobody comes back during a round; when every player of one team is dead, the other team
+// wins the round; when the time runs out, the team with more players alive wins (the same number: a draw). The match
+// is won by the first team to win cfg.winRounds rounds. With nobody on one of the teams (playing alone against nobody)
+// there are no rounds: the dead simply come back after cfg.respawn seconds.
+const teamCount = (team, alive) => [...H.players.values()].filter(q => q.team === team && (!alive || q.alive)).length;
+const roundsOn = () => teamCount('ct') > 0 && teamCount('t') > 0;
+function afterDeath(v) {
+  if (H.winLock) return;
+  if (!roundsOn()) { whenRunning(() => { if (H.players.get(v.id) === v && !H.winLock && !v.alive) hostSpawn(v); }, cfg.respawn * 1000); return; }
+  checkRound();
+}
+function startRound() {
+  if (H.winLock) return;
+  const R = H.round;
+  R.n++; R.start = now(); R.end = R.start + cfg.roundTime; R.over = false;
+  H.drops.clear(); hostNades.length = 0; hostFires.length = 0;
+  hostBroadcast({ t:'round', n: R.n, rs: H.rounds });
+  for (const q of H.players.values()) hostSpawn(q); // the map is rebuilt by everyone on the 'round' message (the host too)
+}
+function checkRound() {
+  const R = H.round;
+  if (R.over || H.winLock || !roundsOn()) return;
+  const ct = teamCount('ct', true), t = teamCount('t', true);
+  if (ct && t) return;
+  endRound(ct ? 'ct' : t ? 't' : null);
+}
+function endRound(winner) {
+  const R = H.round; R.over = true;
+  if (winner) H.rounds[winner]++;
+  for (const q of H.players.values()) if (!q.bot && winner) q.money = Math.min(cfg.maxMoney, q.money + (q.team === winner ? cfg.roundWin : cfg.roundLoss));
+  const matchOver = winner && H.rounds[winner] >= cfg.winRounds;
+  hostBroadcast({ t:'roundEnd', team: winner, rs: H.rounds, win: cfg.roundWin, loss: cfg.roundLoss, last: !!matchOver });
+  if (matchOver) {
+    H.winLock = true;
+    hostBroadcast({ t:'win', team: winner });
+    setTimeout(() => hostRestart('Новый матч!'), 6000);
+  } else whenRunning(startRound, 4000);
+  adminRefresh();
+}
+// the round's clock, from the host's tick
+function roundTick() {
+  const R = H.round, on = roundsOn();
+  if (on && !H.roundsWereOn && !H.winLock && !H.paused) { H.roundsWereOn = true; startRound(); return; } // an enemy team turned up: a fresh round for all
+  H.roundsWereOn = on;
+  if (R.over || H.winLock || !on) return;
+  if (now() < R.end) return;
+  const ct = teamCount('ct', true), t = teamCount('t', true);
+  endRound(ct > t ? 'ct' : t > ct ? 't' : null);
 }
 // new match: scores and money back to the start
 function hostRestart(text) {
   H.drops.clear();
-  for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; q.nades = 0; q.goggles = false; hostSpawn(q); }
-  H.winLock = false;
+  for (const q of H.players.values()) { q.k = 0; q.d = 0; q.money = cfg.startMoney; q.armor = 0; q.helmet = false; q.nades = 0; q.goggles = false; }
+  H.winLock = false; H.rounds = { ct: 0, t: 0 }; H.round.n = 0;
   hostBroadcast({ t:'reset' });
   hostBroadcast({ t:'info', text });
+  startRound();
 }
 // ---- grenades: the host flies its own copy and decides where and when it blows up
 let nadeSeq = 0;
@@ -3513,6 +3568,7 @@ function hostTick(dt) {
     if (n.t >= NADE.fuse) { hostNades.splice(i, 1); hostBlast(n.pos, n.from, { nid: n.nid }); }
   }
   hostFireTick(dt);
+  roundTick();
   for (const d of H.drops.values()) if (now() - d.t > 90) { H.drops.delete(d.did); hostBroadcast({ t:'undrop', did: d.did }); } // weapons lying around vanish after 90 s
   H.snapTimer -= dt;
   if (H.snapTimer <= 0) { H.snapTimer = 0.05; sendSnap(); }
@@ -3521,7 +3577,8 @@ function sendSnap() {
   const r = v => Math.round(v * 100) / 100;
   const pl = [];
   for (const p of H.players.values()) pl.push([p.id, p.name, p.team, r(p.p[0]), r(p.p[1]), r(p.p[2]), r(p.ry), r(p.rx), p.hp, p.alive ? 1 : 0, p.k, p.d, p.w, p.money, p.armor, p.c ? 1 : 0]);
-  hostBroadcast({ t:'snap', pl });
+  const R = H.round;
+  hostBroadcast({ t:'snap', pl, rs: [H.rounds.ct, H.rounds.t], rt: roundsOn() && !R.over ? Math.max(0, Math.ceil(R.end - now())) : -1 });
 }
 
 // ---------- admin panel (only the creator of the game, who is also the host, has it)
@@ -3574,7 +3631,8 @@ async function adminCommand(m) {
       cfg[m.key] = CFG_BOOL.includes(m.key) ? !!m.value
         : m.key === 'jump' ? THREE.MathUtils.clamp(Math.round((+m.value || 1.3) * 10) / 10, 0.3, 30) // metres, can be fractional
         : int(m.value);
-      if (m.key === 'winKills') cfg.winKills = Math.max(1, cfg.winKills);
+      if (m.key === 'winRounds') cfg.winRounds = Math.max(1, cfg.winRounds);
+      if (m.key === 'roundTime') cfg.roundTime = THREE.MathUtils.clamp(cfg.roundTime, 30, 1800);
       if (m.key === 'botLevel') cfg.botLevel = Math.min(2, cfg.botLevel);
       pushCfg(); break;
     case 'price': if (m.item in cfg.prices) { cfg.prices[m.item] = int(m.value); pushCfg(); } break;
@@ -3630,7 +3688,8 @@ function adminAction(act, id) {
     if (p.bot) p.w = DEFAULT_GUN[p.team];
     else hostSend(id, { t:'team', team: p.team });
     hostBroadcast({ t:'info', text: `${p.name} теперь за «${TEAM_NAME[p.team]}»` });
-    hostSpawn(p);
+    if (H.round.over || !roundsOn()) hostSpawn(p); // in the middle of a round: plays from the next one
+    else { p.alive = false; if (!p.bot) hostSend(id, { t:'wait' }); checkRound(); }
   }
   if (act === 'kick') {
     hostSend(id, { t:'kicked' });
@@ -3642,6 +3701,7 @@ function removeBot(id) {
   const b = H.players.get(id); if (!b || !b.bot) return;
   H.players.delete(id); H.bots.splice(H.bots.indexOf(b), 1);
   hostBroadcast({ t:'info', text: b.name + ' удалён' });
+  checkRound();
 }
 $('#adminBtn').onclick = () => window.open(adminUrl(), '_blank');
 setInterval(adminRefresh, 1000); // keep money and scores on the admin page fresh
@@ -3951,7 +4011,7 @@ function botsHear(shooter, at) {
   }
 }
 // ================= CLIENT: handle messages =================
-const WORLD_MSGS = ['world', 'brk', 'prop', 'nade', 'boom', 'fire', 'reset', 'drop', 'undrop'];
+const WORLD_MSGS = ['world', 'brk', 'prop', 'nade', 'boom', 'fire', 'reset', 'round', 'drop', 'undrop'];
 function clientHandle(m) {
   if (mapLoading && WORLD_MSGS.includes(m.t)) { pendingWorld.push(m); return; } // the new map isn't built yet
   switch (m.t) {
@@ -3962,9 +4022,9 @@ function clientHandle(m) {
       break;
     case 'snap': {
       const seen = new Set();
-      teamScore = { ct:0, t:0 };
+      teamScore = { ct: m.rs?.[0] ?? 0, t: m.rs?.[1] ?? 0 }; roundLeft = m.rt ?? -1;
       for (const [id, name, team, x, y, z, ry, rx, hp, alive, k, d, w, money, armor, crouch] of m.pl) {
-        seen.add(id); teamScore[team] += k;
+        seen.add(id);
         if (id === myId) { me.money = money; me.armor = armor; if (!armor) me.helmet = false; }
         let r = remotes.get(id);
         if (r && r.team !== team) { if (r.avatar) scene.remove(r.avatar); remotes.delete(id); r = null; } // switched team: new uniform
@@ -3995,7 +4055,6 @@ function clientHandle(m) {
       cfg = m.cfg;
       applyNames();
       if (cfg.map && cfg.map !== mapId) switchMap(cfg.map); // the admin picked another map
-      $('#goal').textContent = 'до ' + cfg.winKills;
       renderBuyMenu();
       break;
     case 'bought': {
@@ -4081,7 +4140,9 @@ function clientHandle(m) {
         me.alive = false; me.firing = false; setZoom(false);
         if (cfg.loseWeapons) resetLoadout();
         me.goggles = false; // the goggles break when you die
-        showCenter(`Тебя подстрелил <span class="n-${m.kt}">${esc(m.kn)}</span><br><small>Возрождение через ${cfg.respawn} сек…${m.penalty ? ' · штраф −$' + m.penalty : ''}</small>`, cfg.respawn);
+        const wait = roundLeft >= 0 ? 'Вернёшься в следующем раунде — пока смотри за своими' : `Возрождение через ${cfg.respawn} сек…`;
+        showCenter(`Тебя подстрелил <span class="n-${m.kt}">${esc(m.kn)}</span><br><small>${wait}${m.penalty ? ' · штраф −$' + m.penalty : ''}</small>`, 3);
+        spec.t = now() + 2.5; spec.id = null;
       }
       if (m.killer === myId) { beep(880, .15, .12, 'triangle'); if (m.reward) moneyPopup(m.reward, m.head ? 'выстрел в голову' : 'убийство'); }
       const r = remotes.get(m.victim);
@@ -4093,6 +4154,26 @@ function clientHandle(m) {
       beep(523, .2, .15, 'triangle'); setTimeout(() => beep(659, .2, .15, 'triangle'), 200); setTimeout(() => beep(784, .4, .15, 'triangle'), 400);
       break;
     case 'info': addFeed(esc(m.text)); break;
+    case 'round': // a new round: the map is rebuilt, everybody comes back at their base
+      teamScore = { ct: m.rs.ct, t: m.rs.t };
+      resetWorld();
+      showCenter(`Раунд ${m.n}<br><small>Спецназ ${m.rs.ct} : ${m.rs.t} Террористы · до ${cfg.winRounds} побед</small>`, 2.5);
+      beep(660, .12, .1, 'triangle');
+      break;
+    case 'roundEnd': {
+      teamScore = { ct: m.rs.ct, t: m.rs.t };
+      const mine = m.team === myTeam;
+      if (m.last) break; // the match is over: the 'win' message says so
+      showCenter((m.team ? `Раунд выиграли <span class="n-${m.team}">${TEAM_NAME[m.team]}</span>!` : 'Ничья: время вышло') +
+        `<br><small>Спецназ ${m.rs.ct} : ${m.rs.t} Террористы · новый раунд через 4 секунды</small>`, 4);
+      if (m.team) { moneyPopup(mine ? m.win : m.loss, mine ? 'победа в раунде' : 'за раунд'); mine ? beep(784, .3, .12, 'triangle') : beep(220, .3, .1, 'sawtooth'); }
+      break;
+    }
+    case 'wait':
+      me.alive = false;
+      showCenter('Раунд уже идёт<br><small>Ты появишься в следующем раунде — пока смотри за своими</small>', 4);
+      spec.t = now() + 1; spec.id = null;
+      break;
     case 'radio': {
       const line = document.createElement('div');
       line.innerHTML = `📻 <span class="n-${m.team}">${esc(m.name)}</span>: ${esc(m.text)}`;
@@ -4182,7 +4263,35 @@ function look(dx, dy, k) {
 }
 addEventListener('mousemove', e => { if (locked && !IS_TOUCH) look(e.movementX, e.movementY, 0.0011); });
 // trigger pressed / released — shared by the mouse buttons and the touch buttons (0 = fire, 2 = alternate)
+// dead until the round ends: the camera follows a living teammate (or anyone left alive); click to switch
+const spec = { t: Infinity, id: null };
+function spectate(t) {
+  const label = $('#spec');
+  if (me.alive || t < spec.t || roundLeft < 0) { label.style.display = 'none'; return; }
+  const alive = [...remotes.values()].filter(r => r.alive && r.avatar && r.id !== myId);
+  const mates = alive.filter(r => r.team === myTeam), pool = mates.length ? mates : alive;
+  let r = pool.find(q => q.id === spec.id);
+  if (!r) { r = pool[0]; spec.id = r?.id ?? null; }
+  if (!r) { label.style.display = 'none'; return; }
+  const a = r.avatar, yaw = a.rotation.y, head = a.position.clone().add(new THREE.Vector3(0, 1.7, 0));
+  const back = new THREE.Vector3(Math.sin(yaw), 0.45, Math.cos(yaw)).normalize().multiplyScalar(3.2);
+  const cam = head.clone().add(back);
+  losRay.set(head, back.clone().normalize()); losRay.far = 3.2; // don't look from inside a wall
+  const hit = losRay.intersectObjects(worldMeshes, false)[0];
+  if (hit) cam.copy(head).addScaledVector(back.normalize(), Math.max(0.3, hit.distance - 0.3));
+  camera.position.copy(cam); camera.lookAt(head);
+  label.innerHTML = `Наблюдение: <span class="n-${r.team}">${esc(r.name)}</span> <small>${IS_TOUCH ? 'нажми на экран' : 'клик'} — следующий</small>`;
+  label.style.display = 'block';
+}
+function nextSpectate() {
+  const alive = [...remotes.values()].filter(r => r.alive && r.avatar && r.id !== myId);
+  const mates = alive.filter(r => r.team === myTeam), pool = mates.length ? mates : alive;
+  if (!pool.length) return;
+  const i = pool.findIndex(q => q.id === spec.id);
+  spec.id = pool[(i + 1) % pool.length].id;
+}
 function pressTrigger(btn) {
+  if (!me.alive && btn === 0) { nextSpectate(); return; }
   if (btn === 0) { me.firing = true; me.firedThisClick = false; if (locked && me.alive) tryFire(); } // fire right away, so even a quick tap shoots
   if (btn === 2 && WEAPONS[me.weapon].zoom && !me.reloadEnd) setZoom(!me.zoom);
   // grenade, like in CS2: pressing pulls the pin and winds up, releasing throws. Left = far, right = short lob
@@ -4543,6 +4652,7 @@ function frame() {
     // explosions shake the camera
     const sh = shake * shake * 12;
     camera.rotation.set(me.pitch + (Math.random() - .5) * sh, me.yaw + (Math.random() - .5) * sh, (me.alive ? 0 : 0.5) + (Math.random() - .5) * sh);
+    spectate(t);
 
     // viewmodel: sway, recoil, reload dip, weapon draw
     nadeHideT = Math.max(0, nadeHideT - dt);
@@ -4636,6 +4746,8 @@ function frame() {
     }
     if (buyOpen) { const m = '$' + me.money; if ($('#buyMoney').textContent !== m) renderBuyMenu(); }
     $('#sct').textContent = teamScore.ct; $('#st').textContent = teamScore.t;
+    const goal = roundLeft >= 0 ? `${Math.floor(roundLeft / 60)}:${String(roundLeft % 60).padStart(2, '0')}` : 'до ' + cfg.winRounds;
+    if ($('#goal').textContent !== goal) $('#goal').textContent = goal;
     $('#board').style.display = showBoard ? 'block' : 'none';
     if (showBoard) {
       const rows = [...remotes.values()].sort((a, b) => a.team.localeCompare(b.team) || b.k - a.k);
